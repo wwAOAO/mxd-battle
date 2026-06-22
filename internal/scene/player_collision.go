@@ -36,6 +36,9 @@ func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) 
 			nextBottom,
 		)
 	}
+	for _, polygon := range mapDef.Polygons {
+		next.X = resolvePolygonSideCollision(polygon, previous, next)
+	}
 
 	return next.X
 }
@@ -59,6 +62,29 @@ func resolveSolidSideCollision(rect world.Rect, previous Player, next Player, ne
 	}
 	if movingLeft {
 		return rectRight + PlayerHalfWidth(next) + wallSkin
+	}
+	return next.X
+}
+
+func resolvePolygonSideCollision(polygon world.Polygon, previous Player, next Player) float64 {
+	bounds, ok := world.PolygonBounds(polygon)
+	if !ok || !world.RectOverlapsPolygon(playerRect(next), polygon) {
+		return next.X
+	}
+
+	previousRight := PlayerRight(previous)
+	previousLeft := PlayerLeft(previous)
+	nextRight := PlayerRight(next)
+	nextLeft := PlayerLeft(next)
+	boundsRight := bounds.X + bounds.Width
+	movingRight := previousRight <= bounds.X && nextRight >= bounds.X
+	movingLeft := previousLeft >= boundsRight && nextLeft <= boundsRight
+
+	if movingRight {
+		return bounds.X - PlayerHalfWidth(next) - wallSkin
+	}
+	if movingLeft {
+		return boundsRight + PlayerHalfWidth(next) + wallSkin
 	}
 	return next.X
 }
@@ -89,6 +115,9 @@ func resolveCeilingCollision(mapDef world.MapConfig, previous Player, next Playe
 			next,
 		)
 	}
+	for _, polygon := range mapDef.Polygons {
+		next = resolvePolygonCeilingCollision(polygon, previousTop, nextTop, next)
+	}
 	return next
 }
 
@@ -98,6 +127,22 @@ func resolveSolidCeilingCollision(rect world.Rect, previousTop float64, nextTop 
 	crossedBottom := previousTop >= rectBottom && nextTop <= rectBottom
 	if onX && crossedBottom {
 		next.Y = rectBottom + next.Height + wallSkin
+		next.VY = 0
+	}
+	return next
+}
+
+func resolvePolygonCeilingCollision(polygon world.Polygon, previousTop float64, nextTop float64, next Player) Player {
+	bounds, ok := world.PolygonBounds(polygon)
+	if !ok {
+		return next
+	}
+
+	boundsBottom := bounds.Y + bounds.Height
+	onX := PlayerRight(next) > bounds.X && PlayerLeft(next) < bounds.X+bounds.Width
+	crossedBottom := previousTop >= boundsBottom && nextTop <= boundsBottom
+	if onX && crossedBottom && world.RectOverlapsPolygon(playerRect(next), polygon) {
+		next.Y = boundsBottom + next.Height + wallSkin
 		next.VY = 0
 	}
 	return next
@@ -124,6 +169,14 @@ func applyGround(mapDef world.MapConfig, player Player, previousY float64, now t
 				landingY = wall.Y
 			}
 		}
+		for _, polygon := range mapDef.Polygons {
+			if y, ok := polygonLandingY(polygon, player); ok {
+				crossedTop := previousY <= y && player.Y >= y
+				if crossedTop && y < landingY {
+					landingY = y
+				}
+			}
+		}
 	}
 
 	if player.Y >= landingY {
@@ -145,6 +198,32 @@ func terrainLandingY(mapDef world.MapConfig, x float64) float64 {
 		}
 	}
 	return landingY
+}
+
+func polygonLandingY(polygon world.Polygon, player Player) (float64, bool) {
+	sampleXs := []float64{PlayerLeft(player), player.X, PlayerRight(player)}
+	found := false
+	var landingY float64
+	for _, x := range sampleXs {
+		y, ok := world.PolygonTopYAt(polygon, x)
+		if !ok {
+			continue
+		}
+		if !found || y < landingY {
+			landingY = y
+			found = true
+		}
+	}
+	return landingY, found
+}
+
+func playerRect(player Player) world.Rect {
+	return world.Rect{
+		X:      PlayerLeft(player),
+		Y:      PlayerTop(player),
+		Width:  player.Width,
+		Height: player.Height,
+	}
 }
 
 func shouldIgnorePlatform(player Player, platform world.Platform, now time.Time) bool {

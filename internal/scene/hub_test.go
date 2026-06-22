@@ -1192,6 +1192,133 @@ func TestHubMovesHorizontallyFromServerInput(t *testing.T) {
 	}
 }
 
+func TestHubLandsOnPolygonTop(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_polygon_top",
+			Width:        1600,
+			Height:       1600,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Polygons: []world.Polygon{
+				{
+					ID: "stone_polygon",
+					Points: []world.Point{
+						{X: 700, Y: 1200},
+						{X: 980, Y: 1200},
+						{X: 1030, Y: 1320},
+						{X: 660, Y: 1320},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "polygon-lander", X: 840, Y: 1050}, &recordingPeer{}); err != nil {
+		t.Fatalf("join polygon-lander: %v", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		hub.StepPhysics(testTime().Add(time.Duration(i)*50*time.Millisecond), 0.05)
+	}
+
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	player := state.Players["polygon-lander"]
+	if player.Y != 1200 || !player.OnGround {
+		t.Fatalf("expected player to land on polygon top, got %+v", player)
+	}
+}
+
+func TestHubBlocksHorizontalMovementThroughPolygonSide(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_polygon_side",
+			Width:        1600,
+			Height:       1600,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Polygons: []world.Polygon{
+				{
+					ID: "stone_polygon",
+					Points: []world.Point{
+						{X: 700, Y: 1200},
+						{X: 980, Y: 1200},
+						{X: 1030, Y: 1500},
+						{X: 660, Y: 1500},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "polygon-left", X: 620, Y: 1450}, &recordingPeer{}); err != nil {
+		t.Fatalf("join polygon-left: %v", err)
+	}
+
+	player, ok := hub.Move("polygon-left", 760, 1450)
+	if !ok {
+		t.Fatal("expected polygon-left move to succeed")
+	}
+	if player.X >= 660-DefaultPlayerWidth/2 {
+		t.Fatalf("expected polygon side to block right movement, got %+v", player)
+	}
+}
+
+func TestHubBlocksHeadMovementThroughPolygonCeiling(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_polygon_ceiling",
+			Width:        1600,
+			Height:       1600,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Polygons: []world.Polygon{
+				{
+					ID: "floating_polygon",
+					Points: []world.Point{
+						{X: 700, Y: 900},
+						{X: 950, Y: 900},
+						{X: 980, Y: 1040},
+						{X: 680, Y: 1040},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "polygon-head", X: 820, Y: 1180}, &recordingPeer{}); err != nil {
+		t.Fatalf("join polygon-head: %v", err)
+	}
+
+	room := hub.rooms[RoomX]
+	player := room.players["polygon-head"]
+	player.Y = 1120
+	player.VY = -500
+	player = resolvePlayerMovementFrom(room, player, player.X, 1180, testTime()).Player
+
+	expectedY := 1040 + DefaultPlayerHeight + wallSkin
+	if player.Y != expectedY || player.VY != 0 {
+		t.Fatalf("expected polygon ceiling to block upward movement at y=%v, got %+v", expectedY, player)
+	}
+}
 func testTime() time.Time {
 	return time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
 }

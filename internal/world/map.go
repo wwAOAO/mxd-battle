@@ -20,6 +20,7 @@ type MapConfig struct {
 	MoveSpeed    float64    `json:"moveSpeed"`
 	Spawn        Point      `json:"spawn"`
 	Terrain      []Terrain  `json:"terrain,omitempty"`
+	Polygons     []Polygon  `json:"polygons,omitempty"`
 	Platforms    []Platform `json:"platforms"`
 	Walls        []Wall     `json:"walls"`
 	Portals      []Portal   `json:"portals"`
@@ -106,10 +107,20 @@ func cloneTerrain(source []Terrain) []Terrain {
 	}
 	return cloned
 }
+
+func clonePolygons(source []Polygon) []Polygon {
+	cloned := slices.Clone(source)
+	for i := range cloned {
+		cloned[i].Points = slices.Clone(cloned[i].Points)
+	}
+	return cloned
+}
+
 func cloneRoomMaps(source map[string]MapConfig) map[string]MapConfig {
 	cloned := make(map[string]MapConfig, len(source))
 	for roomID, mapDef := range source {
 		mapDef.Terrain = cloneTerrain(mapDef.Terrain)
+		mapDef.Polygons = clonePolygons(mapDef.Polygons)
 		mapDef.Platforms = slices.Clone(mapDef.Platforms)
 		mapDef.Walls = slices.Clone(mapDef.Walls)
 		mapDef.Portals = slices.Clone(mapDef.Portals)

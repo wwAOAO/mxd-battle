@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -266,7 +266,13 @@
     </main>
 
     <script>
-      const world = { id: "wild_x", width: 2400, height: 1500, terrain: [] };
+      const world = {
+        id: "wild_x",
+        width: 2400,
+        height: 1500,
+        terrain: [],
+        polygons: [],
+      };
       const players = new Map();
       const projectiles = new Map();
       const selfId =
@@ -445,6 +451,7 @@
           world.height = event.state.map.height;
           world.groundY = event.state.map.groundY;
           world.terrain = event.state.map.terrain || [];
+          world.polygons = event.state.map.polygons || [];
           world.platforms = event.state.map.platforms || [];
           world.walls = event.state.map.walls || [];
           world.portals = event.state.map.portals || [];
@@ -852,6 +859,11 @@
           ctx.lineCap = "butt";
         }
 
+        if (Array.isArray(world.polygons)) {
+          for (const polygon of world.polygons) {
+            drawPolygon(polygon, offsetX, offsetY, scale);
+          }
+        }
         if (Array.isArray(world.platforms)) {
           for (const platform of world.platforms) {
             ctx.fillStyle = "#8d9468";
@@ -939,6 +951,28 @@
         requestAnimationFrame(draw);
       }
 
+      function drawPolygon(polygon, offsetX, offsetY, scale) {
+        const points = Array.isArray(polygon.points) ? polygon.points : [];
+        if (points.length < 3) return;
+
+        ctx.beginPath();
+        ctx.moveTo(
+          offsetX + points[0].x * scale,
+          offsetY + points[0].y * scale,
+        );
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(
+            offsetX + points[i].x * scale,
+            offsetY + points[i].y * scale,
+          );
+        }
+        ctx.closePath();
+        ctx.fillStyle = "rgba(93, 101, 114, 0.38)";
+        ctx.fill();
+        ctx.strokeStyle = "#303642";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
       function terrainPoints(terrain) {
         if (Array.isArray(terrain.points) && terrain.points.length > 0) {
           return terrain.points;

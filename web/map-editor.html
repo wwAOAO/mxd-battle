@@ -363,6 +363,7 @@
           <h2>Objects</h2>
           <div class="toolbar">
             <button id="addTerrain">Terrain</button>
+            <button id="addPolygon">Polygon</button>
             <button id="addPlatform">Platform</button>
             <button id="addWall">Wall</button>
             <button id="addPortal">Portal</button>
@@ -421,6 +422,7 @@
         moveSpeed: 420,
         spawn: { x: 180, y: 1500 },
         terrain: [],
+        polygons: [],
         platforms: [],
         walls: [],
         portals: [],
@@ -481,6 +483,7 @@
       function allObjects() {
         return [
           ...map.terrain.map((item) => ({ type: "terrain", item })),
+          ...map.polygons.map((item) => ({ type: "polygon", item })),
           ...map.platforms.map((item) => ({ type: "platform", item })),
           ...map.walls.map((item) => ({ type: "wall", item })),
           ...map.portals.map((item) => ({ type: "portal", item })),
@@ -488,8 +491,11 @@
       }
 
       function objectRect(entry) {
-        if (entry.type === "terrain") {
-          const points = terrainPoints(entry.item);
+        if (entry.type === "terrain" || entry.type === "polygon") {
+          const points =
+            entry.type === "terrain"
+              ? terrainPoints(entry.item)
+              : polygonPoints(entry.item);
           const xs = points.map((point) => point.x);
           const ys = points.map((point) => point.y);
           const minX = Math.min(...xs);
@@ -545,6 +551,30 @@
         }
       }
 
+      function normalizePolygon(polygon) {
+        return {
+          id: polygon.id || makeId("polygon", map.polygons),
+          points: Array.isArray(polygon.points)
+            ? polygon.points.map((point) => ({
+                x: Number(point.x) || 0,
+                y: Number(point.y) || 0,
+              }))
+            : [],
+        };
+      }
+
+      function polygonPoints(polygon) {
+        if (!Array.isArray(polygon.points)) polygon.points = [];
+        return polygon.points;
+      }
+
+      function movePolygon(polygon, dx, dy) {
+        for (const point of polygonPoints(polygon)) {
+          point.x += dx;
+          point.y += dy;
+        }
+      }
+
       function objectId(entry) {
         return entry.item.id || "(unnamed)";
       }
@@ -571,6 +601,20 @@
         };
         map.terrain.push(item);
         selectObject("terrain", item);
+      }
+
+      function addPolygon() {
+        const item = {
+          id: makeId("polygon", map.polygons),
+          points: [
+            { x: 700, y: map.groundY - 300 },
+            { x: 980, y: map.groundY - 260 },
+            { x: 1040, y: map.groundY - 80 },
+            { x: 720, y: map.groundY - 40 },
+          ],
+        };
+        map.polygons.push(item);
+        selectObject("polygon", item);
       }
 
       function addPlatform() {
@@ -623,11 +667,13 @@
         const list =
           selected.type === "terrain"
             ? map.terrain
-            : selected.type === "platform"
-              ? map.platforms
-              : selected.type === "wall"
-                ? map.walls
-                : map.portals;
+            : selected.type === "polygon"
+              ? map.polygons
+              : selected.type === "platform"
+                ? map.platforms
+                : selected.type === "wall"
+                  ? map.walls
+                  : map.portals;
         const index = list.indexOf(selected.item);
         if (index >= 0) list.splice(index, 1);
         selected = null;
@@ -652,11 +698,13 @@
         const list =
           selected.type === "terrain"
             ? map.terrain
-            : selected.type === "platform"
-              ? map.platforms
-              : selected.type === "wall"
-                ? map.walls
-                : map.portals;
+            : selected.type === "polygon"
+              ? map.polygons
+              : selected.type === "platform"
+                ? map.platforms
+                : selected.type === "wall"
+                  ? map.walls
+                  : map.portals;
         clone.id = makeId(selected.type, list);
         offsetObject(selected.type, clone, 40, 40);
         list.push(clone);
@@ -666,6 +714,10 @@
       function offsetObject(type, item, dx, dy) {
         if (type === "terrain") {
           moveTerrain(item, dx, dy);
+          return;
+        }
+        if (type === "polygon") {
+          movePolygon(item, dx, dy);
           return;
         }
         if (type === "portal") {
@@ -712,8 +764,12 @@
         }
 
         addTextInput(editor, "ID", selected.item, "id");
-        if (selected.type === "terrain") {
-          const points = terrainPoints(selected.item);
+        if (selected.type === "terrain" || selected.type === "polygon") {
+          const points =
+            selected.type === "terrain"
+              ? terrainPoints(selected.item)
+              : polygonPoints(selected.item);
+          const minPoints = selected.type === "polygon" ? 3 : 2;
           points.forEach((point, index) => {
             addNumberRow(editor, [
               [`P${index + 1} X`, point, "x"],
@@ -738,9 +794,9 @@
           removeButton.textContent = "Delete Point";
           removeButton.type = "button";
           removeButton.className = "danger";
-          removeButton.disabled = points.length <= 2;
+          removeButton.disabled = points.length <= minPoints;
           removeButton.addEventListener("click", () => {
-            if (points.length > 2) points.pop();
+            if (points.length > minPoints) points.pop();
             refreshAfterObjectEdit();
             renderSelectedEditor();
           });
@@ -841,6 +897,9 @@
           },
           terrain: Array.isArray(nextMap.terrain)
             ? nextMap.terrain.map(normalizeTerrain)
+            : [],
+          polygons: Array.isArray(nextMap.polygons)
+            ? nextMap.polygons.map(normalizePolygon)
             : [],
           platforms: Array.isArray(nextMap.platforms) ? nextMap.platforms : [],
           walls: Array.isArray(nextMap.walls) ? nextMap.walls : [],
@@ -964,6 +1023,9 @@
         for (const terrain of map.terrain) {
           drawTerrain(terrain);
         }
+        for (const polygon of map.polygons) {
+          drawPolygon(polygon);
+        }
         for (const platform of map.platforms) {
           drawRect(platform, "#8b9468", "#59643e");
           if (platform.solidSides || platform.solidCeiling) drawFlags(platform);
@@ -984,13 +1046,18 @@
         if (selected) {
           ctx.strokeStyle = "#f4b400";
           ctx.lineWidth = 3;
-          if (selected.type === "terrain") {
-            const points = terrainPoints(selected.item).map(worldToScreen);
+          if (selected.type === "terrain" || selected.type === "polygon") {
+            const points = (
+              selected.type === "terrain"
+                ? terrainPoints(selected.item)
+                : polygonPoints(selected.item)
+            ).map(worldToScreen);
             if (points.length >= 2) {
               ctx.beginPath();
               ctx.moveTo(points[0].x, points[0].y);
               for (let i = 1; i < points.length; i++)
                 ctx.lineTo(points[i].x, points[i].y);
+              if (selected.type === "polygon") ctx.closePath();
               ctx.stroke();
             }
             for (const point of points) drawHandle(point, "#f4b400");
@@ -1047,12 +1114,29 @@
         }
       }
 
+      function drawPolygon(polygon) {
+        const points = polygonPoints(polygon).map(worldToScreen);
+        if (points.length < 3) return;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = "rgba(92, 101, 114, 0.36)";
+        ctx.fill();
+        ctx.strokeStyle = "#303743";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        for (const point of points) drawHandle(point, "#303743");
+      }
+
       function drawHandle(point, color) {
         ctx.fillStyle = color;
         ctx.strokeStyle = "#172033";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 7 * devicePixelRatio, 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, 5 * devicePixelRatio, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       }
@@ -1095,9 +1179,13 @@
             const endpoint = hitTerrainEndpoint(entry.item, point);
             if (endpoint) return { ...entry, handle: endpoint };
           }
+          if (entry.type === "polygon") {
+            const endpoint = hitPolygonPoint(entry.item, point);
+            if (endpoint) return { ...entry, handle: endpoint };
+          }
         }
         for (const entry of objects) {
-          if (entry.type !== "terrain") {
+          if (entry.type !== "terrain" && entry.type !== "polygon") {
             const handle = hitRectHandle(objectRect(entry), point);
             if (handle) return { ...entry, handle };
           }
@@ -1118,7 +1206,17 @@
         const points = terrainPoints(terrain);
         for (let i = 0; i < points.length; i++) {
           if (distance(point, worldToScreen(points[i])) <= radius)
-            return `point-${i}`;
+            return "point-" + i;
+        }
+        return "";
+      }
+
+      function hitPolygonPoint(polygon, point) {
+        const radius = 10 * devicePixelRatio;
+        const points = polygonPoints(polygon);
+        for (let i = 0; i < points.length; i++) {
+          if (distance(point, worldToScreen(points[i])) <= radius)
+            return "point-" + i;
         }
         return "";
       }
@@ -1235,11 +1333,15 @@
         }
         event.preventDefault();
         const worldPoint = screenToWorld(pointerPoint(event));
-        if (drag.entry.type === "terrain") {
-          const terrain = drag.entry.item;
+        if (drag.entry.type === "terrain" || drag.entry.type === "polygon") {
+          const shape = drag.entry.item;
           if (drag.handle && drag.handle.startsWith("point-")) {
             const pointIndex = Number(drag.handle.slice("point-".length));
-            const point = terrainPoints(terrain)[pointIndex];
+            const points =
+              drag.entry.type === "terrain"
+                ? terrainPoints(shape)
+                : polygonPoints(shape);
+            const point = points[pointIndex];
             if (point) {
               point.x = Math.round(worldPoint.x);
               point.y = Math.round(worldPoint.y);
@@ -1250,7 +1352,8 @@
             const nextY = Math.round(worldPoint.y - drag.dy);
             const dx = nextX - rect.x;
             const dy = nextY - rect.y;
-            moveTerrain(terrain, dx, dy);
+            if (drag.entry.type === "terrain") moveTerrain(shape, dx, dy);
+            else movePolygon(shape, dx, dy);
           }
         } else {
           const rect = objectRect(drag.entry);
@@ -1308,6 +1411,7 @@
 
       for (const id of fields) $(id).addEventListener("input", readForm);
       $("addTerrain").addEventListener("click", addTerrain);
+      $("addPolygon").addEventListener("click", addPolygon);
       $("addPlatform").addEventListener("click", addPlatform);
       $("addWall").addEventListener("click", addWall);
       $("addPortal").addEventListener("click", addPortal);
