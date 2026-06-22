@@ -1,0 +1,79 @@
+{
+  "id": "Rainbow_Island_Practice",
+  "name": "Rainbow_Island_Practice",
+  "width": 2400,
+  "height": 1500,
+  "groundY": 1500,
+  "gravity": 2600,
+  "jumpVelocity": -980,
+  "moveSpeed": 420,
+  "spawn": {
+    "x": 180,
+    "y": 1500
+  },
+  "terrain": [],
+  "platforms": [
+    {
+      "id": "floating_stone_x_1",
+      "x": 768,
+      "y": 1395,
+      "width": 360,
+      "height": 44
+    },
+    {
+      "id": "floating_stone_x_2",
+      "x": 1096,
+      "y": 1284,
+      "width": 360,
+      "height": 44
+    },
+    {
+      "id": "floating_stone_x_3",
+      "x": 1661,
+      "y": 1318,
+      "width": 360,
+      "height": 44
+    },
+    {
+      "id": "floating_stone_x_4",
+      "x": 1907,
+      "y": 1207,
+      "width": 360,
+      "height": 44
+    },
+    {
+      "id": "floating_stone_x_5",
+      "x": 709,
+      "y": 1164,
+      "width": 360,
+      "height": 44,
+      "solidSides": true,
+      "solidCeiling": true
+    }
+  ],
+  "walls": [
+    {
+      "id": "stone_wall_x_1",
+      "x": 1500,
+      "y": 1220,
+      "width": 80,
+      "height": 280
+    }
+  ],
+  "portals": [
+    {
+      "id": "Rainbow_Island_to_Treasure_Island",
+      "targetRoomId": "Treasure_Island.city",
+      "area": {
+        "x": 2350,
+        "y": 1350,
+        "width": 45,
+        "height": 151
+      },
+      "target": {
+        "x": 42,
+        "y": 1130
+      }
+    }
+  ]
+}

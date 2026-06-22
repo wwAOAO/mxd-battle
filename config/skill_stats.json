@@ -1,0 +1,21 @@
+{
+  "magic_missile": {
+    "id": "magic_missile",
+    "name": "Magic Missile",
+    "mpCost": 12,
+    "cooldownMs": 900,
+    "range": 420,
+    "width": 420,
+    "height": 72,
+    "projectile": {
+      "speed": 760,
+      "width": 48,
+      "height": 32,
+      "maxDistance": 420
+    },
+    "damage": {
+      "base": 8,
+      "magicRate": 1.2
+    }
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "id": "Treasure_Island_city",
+  "name": "Treasure Island city",
+  "width": 2400,
+  "height": 1500,
+  "groundY": 1500,
+  "gravity": 2600,
+  "jumpVelocity": -980,
+  "moveSpeed": 420,
+  "spawn": {
+    "x": 180,
+    "y": 1500
+  },
+  "terrain": [],
+  "platforms": [
+    {
+      "id": "platform_1",
+      "x": 1597,
+      "y": 1330,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_2",
+      "x": 1807,
+      "y": 1259,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_3",
+      "x": 2001,
+      "y": 1188,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_4",
+      "x": 1723,
+      "y": 1073,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_5",
+      "x": 1854,
+      "y": 891,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_6",
+      "x": 2019,
+      "y": 731,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_7",
+      "x": 458,
+      "y": 921,
+      "width": 1263,
+      "height": 183,
+      "solidSides": true
+    },
+    {
+      "id": "platform_8",
+      "x": 280,
+      "y": 1074,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_9",
+      "x": 342,
+      "y": 1368,
+      "width": 180,
+      "height": 33
+    },
+    {
+      "id": "platform_10",
+      "x": 507,
+      "y": 1446,
+      "width": 1179,
+      "height": 56,
+      "solidSides": true,
+      "solidCeiling": true
+    },
+    {
+      "id": "platform_11",
+      "x": 9,
+      "y": 1209,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_12",
+      "x": 562,
+      "y": 379,
+      "width": 1263,
+      "height": 183,
+      "solidSides": true
+    },
+    {
+      "id": "platform_13",
+      "x": 1891,
+      "y": 623,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_14",
+      "x": 1826,
+      "y": 533,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_15",
+      "x": 2100,
+      "y": 812,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_16",
+      "x": 90,
+      "y": 644,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_17",
+      "x": 289,
+      "y": 772,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_18",
+      "x": 319,
+      "y": 575,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_19",
+      "x": 320,
+      "y": 499,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_20",
+      "x": 319,
+      "y": 410,
+      "width": 178,
+      "height": 31
+    },
+    {
+      "id": "platform_21",
+      "x": 200,
+      "y": 1300,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_22",
+      "x": 2199,
+      "y": 1089,
+      "width": 205,
+      "height": 42
+    }
+  ],
+  "walls": [],
+  "portals": [
+    {
+      "id": "Treasure_Island.city_to_Rainbow_Island.practice",
+      "targetRoomId": "Rainbow_Island.practice",
+      "area": {
+        "x": 9,
+        "y": 1078,
+        "width": 62,
+        "height": 126
+      },
+      "target": {
+        "x": 2370,
+        "y": 1410
+      }
+    },
+    {
+      "id": "portal_2",
+      "targetRoomId": "Treasure_Island.city",
+      "area": {
+        "x": 2336,
+        "y": 934,
+        "width": 60,
+        "height": 144
+      },
+      "target": {
+        "x": 120,
+        "y": 1500
+      }
+    }
+  ]
+}

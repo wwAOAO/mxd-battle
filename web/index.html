@@ -1,0 +1,1220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MXD Battle World Sync Test</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: #172033;
+        background: #f4f7fb;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 16px;
+        height: 100vh;
+        padding: 16px;
+        overflow: hidden;
+      }
+
+      aside,
+      .map-wrap {
+        border: 1px solid #d7dee9;
+        background: #ffffff;
+      }
+
+      aside {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 0;
+        overflow: auto;
+        padding: 16px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      input,
+      select,
+      button {
+        height: 36px;
+        border: 1px solid #c7d1df;
+        border-radius: 6px;
+        padding: 0 10px;
+        font: inherit;
+        background: #ffffff;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 700;
+        color: #ffffff;
+        border-color: #2c6eea;
+        background: #2c6eea;
+      }
+
+      button.secondary {
+        color: #243047;
+        border-color: #c7d1df;
+        background: #eef3f9;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .panel {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #d7dee9;
+        border-radius: 6px;
+        background: #f8fbff;
+      }
+
+      .panel-title {
+        margin: 0;
+        color: #243047;
+        font-size: 14px;
+        font-weight: 750;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .stat-grid input {
+        width: 100%;
+      }
+
+      .status {
+        padding: 10px;
+        border-radius: 6px;
+        color: #5f3600;
+        background: #fff1d6;
+        font-size: 13px;
+      }
+
+      .status.connected {
+        color: #0d5130;
+        background: #dff7ea;
+      }
+
+      .map-wrap {
+        position: relative;
+        overflow: hidden;
+        min-height: 0;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background:
+          linear-gradient(rgba(44, 110, 234, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(44, 110, 234, 0.08) 1px, transparent 1px),
+          #edf5ef;
+        background-size: 48px 48px;
+      }
+
+      pre {
+        flex: 1;
+        min-height: 120px;
+        overflow: auto;
+        margin: 0;
+        padding: 10px;
+        border: 1px solid #d7dee9;
+        border-radius: 6px;
+        color: #dbe7ff;
+        background: #111827;
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto minmax(0, 1fr);
+        }
+
+        aside {
+          max-height: 42vh;
+        }
+
+        .map-wrap {
+          min-height: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside>
+        <h1>MXD Battle World Sync Test</h1>
+
+        <label>
+          Room
+          <select id="room">
+            <option value="Rainbow_Island.practice">
+              Rainbow_Island.practice
+            </option>
+            <option value="Treasure_Island.city">Treasure_Island.city</option>
+          </select>
+        </label>
+
+        <label>
+          Player ID
+          <input id="player" value="" />
+        </label>
+
+        <label>
+          Name
+          <input id="name" value="Hero" />
+        </label>
+
+        <div class="row">
+          <button id="connect">Connect</button>
+          <button id="disconnect" class="secondary">Disconnect</button>
+        </div>
+
+        <div id="status" class="status">Disconnected</div>
+        <div class="status">
+          Left/Right move, C jumps, Down+C drops, Up uses portal, X attacks, Z
+          casts.
+        </div>
+
+        <section class="panel" id="primary-stat-panel">
+          <p class="panel-title">Primary Stat</p>
+          <div class="stat-grid">
+            <label>
+              STR
+              <input
+                id="stat-strength"
+                type="number"
+                min="0"
+                step="1"
+                value="0"
+              />
+            </label>
+            <label>
+              INT
+              <input
+                id="stat-intelligence"
+                type="number"
+                min="0"
+                step="1"
+                value="0"
+              />
+            </label>
+            <label>
+              AGI
+              <input
+                id="stat-agility"
+                type="number"
+                min="0"
+                step="1"
+                value="0"
+              />
+            </label>
+            <label>
+              LUK
+              <input id="stat-luck" type="number" min="0" step="1" value="0" />
+            </label>
+          </div>
+        </section>
+
+        <pre id="log"></pre>
+      </aside>
+
+      <section class="map-wrap">
+        <canvas id="map" width="1280" height="720"></canvas>
+      </section>
+    </main>
+
+    <script>
+      const world = { id: "wild_x", width: 2400, height: 1500, terrain: [] };
+      const players = new Map();
+      const projectiles = new Map();
+      const selfId =
+        "role-" + Math.random().toString(16).slice(2, 8).padEnd(6, "0");
+
+      const $ = (id) => document.getElementById(id);
+      const canvas = $("map");
+      const ctx = canvas.getContext("2d");
+      let socket = null;
+      const pressedKeys = new Set();
+      const attacks = [];
+      const damageTexts = [];
+      let lastInputX = 0;
+      let lastFrameAt = performance.now();
+      let jobStatConfigs = {};
+      const statInputIds = {
+        strength: "stat-strength",
+        intelligence: "stat-intelligence",
+        agility: "stat-agility",
+        luck: "stat-luck",
+      };
+
+      $("player").value = selfId;
+
+      function log(message, data) {
+        const line = data
+          ? `${new Date().toLocaleTimeString()} ${message} ${JSON.stringify(data)}`
+          : `${new Date().toLocaleTimeString()} ${message}`;
+        $("log").textContent = `${line}\n${$("log").textContent}`.slice(
+          0,
+          9000,
+        );
+      }
+
+      function setStatus(text, connected) {
+        $("status").textContent = text;
+        $("status").classList.toggle("connected", connected);
+      }
+
+      function connect() {
+        if (socket && socket.readyState === WebSocket.OPEN) return;
+
+        const params = new URLSearchParams({
+          room: $("room").value,
+          player: $("player").value.trim(),
+          name: $("name").value.trim(),
+        });
+        socket = new WebSocket(`ws://${location.host}/ws?${params}`);
+
+        socket.addEventListener("open", () => {
+          setStatus(`Connected to room ${$("room").value}`, true);
+          log("connected");
+        });
+
+        socket.addEventListener("message", (event) => {
+          const payload = JSON.parse(event.data);
+          applyEvent(payload);
+          log(payload.type, payload);
+        });
+
+        socket.addEventListener("close", () => {
+          setStatus("Disconnected", false);
+          log("closed");
+        });
+
+        socket.addEventListener("error", () => {
+          setStatus("Connection error", false);
+          log("error");
+        });
+      }
+
+      async function loadRooms() {
+        try {
+          const response = await fetch("/rooms");
+          const payload = await response.json();
+          const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
+          if (rooms.length === 0) return;
+
+          const selectedRoom = $("room").value;
+          $("room").textContent = "";
+          for (const room of rooms) {
+            const option = document.createElement("option");
+            option.value = room;
+            option.textContent = room;
+            $("room").appendChild(option);
+          }
+          if (rooms.includes(selectedRoom)) {
+            $("room").value = selectedRoom;
+          } else {
+            $("room").value = rooms[0];
+          }
+        } catch (error) {
+          log("failed to load rooms", { message: error.message });
+        }
+      }
+
+      async function loadJobStats() {
+        const candidates = ["/job-stats"];
+        for (const path of candidates) {
+          try {
+            const response = await fetch(path);
+            if (!response.ok) continue;
+            jobStatConfigs = await response.json();
+            log("job stats loaded", { path });
+            return;
+          } catch (error) {
+            log("failed to load job stats", { path, message: error.message });
+          }
+        }
+      }
+
+      function disconnect() {
+        if (socket) socket.close();
+        socket = null;
+      }
+
+      function jump() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+
+        socket.send(JSON.stringify({ type: "jump" }));
+      }
+
+      function drop() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+
+        socket.send(JSON.stringify({ type: "drop" }));
+      }
+
+      function usePortal() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+
+        socket.send(JSON.stringify({ type: "portal" }));
+      }
+
+      function normalAttack() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+
+        socket.send(JSON.stringify({ type: "attack" }));
+      }
+
+      function castMagicMissile() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+
+        socket.send(
+          JSON.stringify({ type: "skill", skillId: "magic_missile" }),
+        );
+      }
+
+      function sendInput(inputX) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (inputX === lastInputX) return;
+
+        lastInputX = inputX;
+        socket.send(JSON.stringify({ type: "input", inputX }));
+      }
+
+      function applyEvent(event) {
+        if (event.type === "snapshot" && event.state) {
+          world.id = event.state.map.id;
+          world.width = event.state.map.width;
+          world.height = event.state.map.height;
+          world.groundY = event.state.map.groundY;
+          world.terrain = event.state.map.terrain || [];
+          world.platforms = event.state.map.platforms || [];
+          world.walls = event.state.map.walls || [];
+          world.portals = event.state.map.portals || [];
+          $("room").value = event.state.id;
+          players.clear();
+          projectiles.clear();
+          Object.values(event.state.players).forEach((player) => {
+            players.set(player.id, withDisplayPosition(player));
+          });
+          Object.values(event.state.projectiles || {}).forEach((projectile) => {
+            projectiles.set(projectile.id, withDisplayProjectile(projectile));
+          });
+          syncPrimaryStatForm();
+        }
+        if (event.player) {
+          const previous = players.get(event.player.id);
+          players.set(event.player.id, {
+            ...event.player,
+            displayX: previous ? previous.displayX : event.player.x,
+            displayY: previous ? previous.displayY : event.player.y,
+          });
+          if (event.player.id === $("player").value.trim()) {
+            syncPrimaryStatForm();
+          }
+        }
+        if (event.type === "player_attacked" && event.attack) {
+          attacks.push({
+            ...event.attack,
+            expiresAt: performance.now() + 180,
+          });
+          addDamageText(event.attack);
+        }
+        if (
+          (event.type === "player_skill_cast" ||
+            event.type === "player_skill_hit") &&
+          event.skill
+        ) {
+          if (event.projectile) {
+            const previous = projectiles.get(event.projectile.id);
+            projectiles.set(
+              event.projectile.id,
+              withDisplayProjectile(event.projectile, previous),
+            );
+          }
+          addSkillDamageText(event.skill);
+        }
+        if (event.type === "projectile_moved" && event.projectile) {
+          const previous = projectiles.get(event.projectile.id);
+          projectiles.set(
+            event.projectile.id,
+            withDisplayProjectile(event.projectile, previous),
+          );
+        }
+        if (event.type === "projectile_removed" && event.projectileId) {
+          projectiles.delete(event.projectileId);
+        }
+        if (event.type === "player_left") players.delete(event.playerId);
+      }
+
+      function addDamageText(attack) {
+        if (!attack.targetId || !attack.outcome || !attack.outcome.isHit)
+          return;
+
+        const now = performance.now();
+        const self = $("player").value.trim();
+        const target = players.get(attack.targetId);
+        const attacker = players.get(attack.attackerId);
+        const anchor = target || attacker;
+        if (!anchor) return;
+
+        const isOutgoing = attack.attackerId === self;
+        const isIncoming = attack.targetId === self;
+        const label = isIncoming
+          ? `-${attack.outcome.damage}`
+          : isOutgoing
+            ? `${attack.outcome.damage}`
+            : `${attack.outcome.damage}`;
+
+        damageTexts.push({
+          x: anchor.x,
+          y: anchor.y - (anchor.height || 96) - 10,
+          label,
+          color: isIncoming ? "#cf3d4d" : isOutgoing ? "#f59e0b" : "#ffffff",
+          stroke: isIncoming ? "#5f141d" : "#111827",
+          createdAt: now,
+          expiresAt: now + 850,
+        });
+      }
+
+      function addSkillDamageText(skill) {
+        if (!skill.targetId || !skill.outcome || !skill.outcome.isHit) return;
+        addDamageText({
+          attackerId: skill.casterId,
+          targetId: skill.targetId,
+          outcome: skill.outcome,
+        });
+      }
+
+      function readPrimaryStatForm() {
+        return {
+          strength: readStatInput("strength"),
+          intelligence: readStatInput("intelligence"),
+          agility: readStatInput("agility"),
+          luck: readStatInput("luck"),
+        };
+      }
+
+      function readStatInput(key) {
+        const value = Number($(statInputIds[key]).value);
+        return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+      }
+
+      function sendPrimaryStat() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        const stat = readPrimaryStatForm();
+        applyLocalPrimaryStat(stat);
+        socket.send(JSON.stringify({ type: "stat", stat }));
+        log("stat sent", stat);
+      }
+
+      function applyLocalPrimaryStat(stat) {
+        const playerId = $("player").value.trim();
+        const self = players.get(playerId);
+        if (!self || !self.stat) return;
+
+        const nextStat = {
+          ...self.stat,
+          base: {
+            ...(self.stat.base || {}),
+            ...stat,
+          },
+        };
+        nextStat.final = addStats(
+          nextStat.base,
+          nextStat.bonus,
+          nextStat.equipment,
+          nextStat.extra,
+        );
+
+        players.set(playerId, {
+          ...self,
+          stat: nextStat,
+          combatStat: calculateCombatStat(nextStat.final, self.jobCode),
+        });
+      }
+
+      function addStats(...layers) {
+        const total = {
+          strength: 0,
+          intelligence: 0,
+          agility: 0,
+          luck: 0,
+          hp: 0,
+          mp: 0,
+          hpMax: 0,
+          mpMax: 0,
+        };
+
+        for (const layer of layers) {
+          if (!layer) continue;
+          for (const key of Object.keys(total)) {
+            total[key] += Number(layer[key]) || 0;
+          }
+        }
+        return total;
+      }
+
+      function applyStatGrowth(stat, jobCode) {
+        const code = jobCode || "beginner";
+        const job = jobStatConfigs[code] || jobStatConfigs.beginner || {};
+        const allocation = job.allocation || {};
+        const next = { ...stat };
+        next.hpMax += calculateAllocatedStat(next, allocation.hpMax);
+        next.mpMax += calculateAllocatedStat(next, allocation.mpMax);
+        next.hp = Math.min(next.hp, next.hpMax);
+        next.mp = Math.min(next.mp, next.mpMax);
+        return next;
+      }
+      function calculateCombatStat(stat, jobCode) {
+        const code = jobCode || "beginner";
+        const job = jobStatConfigs[code] || jobStatConfigs.beginner || {};
+        const allocation = job.allocation || {};
+
+        const attackTiming = calculateAttackTiming(stat, job);
+        return {
+          physicalAttackMin: calculateAllocatedStat(
+            stat,
+            allocation.physicalAttackMin,
+          ),
+          physicalAttackMax: calculateAllocatedStat(
+            stat,
+            allocation.physicalAttackMax,
+          ),
+          magicAttackMin: calculateAllocatedStat(
+            stat,
+            allocation.magicAttackMin,
+          ),
+          magicAttackMax: calculateAllocatedStat(
+            stat,
+            allocation.magicAttackMax,
+          ),
+          physicalDefense: calculateAllocatedStat(
+            stat,
+            allocation.physicalDefense,
+          ),
+          magicDefense: calculateAllocatedStat(stat, allocation.magicDefense),
+          moveSpeed: calculateAllocatedStat(stat, allocation.moveSpeed),
+          evasion: calculateAllocatedStat(stat, allocation.evasion),
+          accuracy: calculateAllocatedStat(stat, allocation.accuracy),
+          critRate: calculateAllocatedStat(stat, allocation.critRate),
+          critDamage: calculateAllocatedStat(stat, allocation.critDamage),
+          hpRecovery: calculateAllocatedFloatStat(stat, allocation.hpRecovery),
+          mpRecovery: calculateAllocatedFloatStat(stat, allocation.mpRecovery),
+          attackStartupMs: attackTiming.startupMs,
+          attackActiveMs: attackTiming.activeMs,
+          attackRecoveryMs: attackTiming.recoveryMs,
+          attackIntervalMs: attackTiming.intervalMs,
+        };
+      }
+
+      function calculateAttackTiming(stat, job) {
+        const intervalMs = calculateAttackIntervalMs(stat, job);
+        const interval = job.attackInterval || {};
+        const startupMs = Number(interval.startupMs) || 0;
+        const activeMs = Number(interval.activeMs) || 0;
+        const recoveryMs = Number(interval.recoveryMs) || 0;
+        const baseTotal = startupMs + activeMs + recoveryMs;
+        if (baseTotal <= 0) {
+          const startup = Math.floor(intervalMs / 4);
+          const active = Math.floor(intervalMs / 6);
+          return {
+            startupMs: startup,
+            activeMs: active,
+            recoveryMs: intervalMs - startup - active,
+            intervalMs,
+          };
+        }
+
+        const startup = Math.round((intervalMs * startupMs) / baseTotal);
+        const active = Math.round((intervalMs * activeMs) / baseTotal);
+        return {
+          startupMs: startup,
+          activeMs: active,
+          recoveryMs: Math.max(0, intervalMs - startup - active),
+          intervalMs,
+        };
+      }
+
+      function calculateAttackIntervalMs(stat, job) {
+        const interval = job.attackInterval || null;
+        if (!interval) return Number(job.attackIntervalMs) || 600;
+
+        const baseMs = Number(interval.baseMs) || 600;
+        const minMs = Number(interval.minMs) || 250;
+        let maxMs = Number(interval.maxMs) || 1500;
+        if (maxMs < minMs) maxMs = minMs;
+        const reduction = interval.reduction || {};
+        const value = Math.round(
+          baseMs -
+            (Number(stat.strength) || 0) * (Number(reduction.strength) || 0) -
+            (Number(stat.intelligence) || 0) *
+              (Number(reduction.intelligence) || 0) -
+            (Number(stat.agility) || 0) * (Number(reduction.agility) || 0) -
+            (Number(stat.luck) || 0) * (Number(reduction.luck) || 0),
+        );
+        return Math.max(minMs, Math.min(maxMs, value));
+      }
+
+      function calculateAllocatedStat(stat, percent) {
+        if (!percent) return 0;
+        return Math.round(
+          ((Number(stat.strength) || 0) * (Number(percent.strength) || 0)) /
+            100 +
+            ((Number(stat.intelligence) || 0) *
+              (Number(percent.intelligence) || 0)) /
+              100 +
+            ((Number(stat.agility) || 0) * (Number(percent.agility) || 0)) /
+              100 +
+            ((Number(stat.luck) || 0) * (Number(percent.luck) || 0)) / 100,
+        );
+      }
+
+      function calculateAllocatedFloatStat(stat, percent) {
+        if (!percent) return 0;
+        return roundForDisplay(
+          ((Number(stat.strength) || 0) * (Number(percent.strength) || 0)) /
+            100 +
+            ((Number(stat.intelligence) || 0) *
+              (Number(percent.intelligence) || 0)) /
+              100 +
+            ((Number(stat.agility) || 0) * (Number(percent.agility) || 0)) /
+              100 +
+            ((Number(stat.luck) || 0) * (Number(percent.luck) || 0)) / 100,
+        );
+      }
+
+      function formatStatNumber(value) {
+        return roundForDisplay(value).toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        });
+      }
+
+      function roundForDisplay(value) {
+        const number = Number(value) || 0;
+        return Math.round((number + Number.EPSILON) * 100) / 100;
+      }
+      function syncPrimaryStatForm() {
+        const self = players.get($("player").value.trim());
+        const baseStat = self && self.stat ? self.stat.base || self.stat : null;
+        if (!baseStat) return;
+
+        for (const key of Object.keys(statInputIds)) {
+          const input = $(statInputIds[key]);
+          if (document.activeElement === input) continue;
+          input.value = baseStat[key] || 0;
+        }
+      }
+
+      function withDisplayPosition(player) {
+        return { ...player, displayX: player.x, displayY: player.y };
+      }
+
+      function withDisplayProjectile(projectile, previous) {
+        return {
+          ...projectile,
+          displayX: previous ? previous.displayX : projectile.x,
+          displayY: previous ? previous.displayY : projectile.y,
+        };
+      }
+
+      function smoothPlayers(dt) {
+        const stiffness = 18;
+        const t = 1 - Math.exp(-stiffness * dt);
+        for (const player of players.values()) {
+          player.displayX += (player.x - player.displayX) * t;
+          player.displayY += (player.y - player.displayY) * t;
+        }
+      }
+
+      function smoothProjectiles(dt) {
+        const stiffness = 30;
+        const t = 1 - Math.exp(-stiffness * dt);
+        for (const projectile of projectiles.values()) {
+          projectile.displayX += (projectile.x - projectile.displayX) * t;
+          projectile.displayY += (projectile.y - projectile.displayY) * t;
+        }
+      }
+
+      function draw(now = performance.now()) {
+        const dt = Math.min((now - lastFrameAt) / 1000, 0.05);
+        lastFrameAt = now;
+        smoothPlayers(dt);
+        smoothProjectiles(dt);
+
+        const scale = Math.min(
+          canvas.width / world.width,
+          canvas.height / world.height,
+        );
+        const offsetX = (canvas.width - world.width * scale) / 2;
+        const offsetY = (canvas.height - world.height * scale) / 2;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#dfeee4";
+        ctx.fillRect(
+          offsetX,
+          offsetY,
+          world.width * scale,
+          world.height * scale,
+        );
+        ctx.strokeStyle = "#6f9b7e";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          offsetX,
+          offsetY,
+          world.width * scale,
+          world.height * scale,
+        );
+
+        if (typeof world.groundY === "number") {
+          const groundY = offsetY + world.groundY * scale;
+          ctx.fillStyle = "#7c8f65";
+          ctx.fillRect(offsetX, groundY, world.width * scale, 10);
+        }
+
+        if (Array.isArray(world.terrain)) {
+          ctx.strokeStyle = "#3f7d4a";
+          ctx.lineWidth = Math.max(3, 5 * scale);
+          ctx.lineCap = "round";
+          for (const terrain of world.terrain) {
+            const points = terrainPoints(terrain);
+            if (points.length < 2) continue;
+            ctx.beginPath();
+            ctx.moveTo(
+              offsetX + points[0].x * scale,
+              offsetY + points[0].y * scale,
+            );
+            for (let i = 1; i < points.length; i++) {
+              ctx.lineTo(
+                offsetX + points[i].x * scale,
+                offsetY + points[i].y * scale,
+              );
+            }
+            ctx.stroke();
+          }
+          ctx.lineCap = "butt";
+        }
+
+        if (Array.isArray(world.platforms)) {
+          for (const platform of world.platforms) {
+            ctx.fillStyle = "#8d9468";
+            ctx.fillRect(
+              offsetX + platform.x * scale,
+              offsetY + platform.y * scale,
+              platform.width * scale,
+              platform.height * scale,
+            );
+            ctx.strokeStyle = "#5f6843";
+            ctx.strokeRect(
+              offsetX + platform.x * scale,
+              offsetY + platform.y * scale,
+              platform.width * scale,
+              platform.height * scale,
+            );
+          }
+        }
+
+        if (Array.isArray(world.walls)) {
+          for (const wall of world.walls) {
+            ctx.fillStyle = "#5c6370";
+            ctx.fillRect(
+              offsetX + wall.x * scale,
+              offsetY + wall.y * scale,
+              wall.width * scale,
+              wall.height * scale,
+            );
+            ctx.strokeStyle = "#303642";
+            ctx.strokeRect(
+              offsetX + wall.x * scale,
+              offsetY + wall.y * scale,
+              wall.width * scale,
+              wall.height * scale,
+            );
+          }
+        }
+
+        if (Array.isArray(world.portals)) {
+          for (const portal of world.portals) {
+            const area = portal.area;
+            ctx.fillStyle = "rgba(226, 61, 77, 0.18)";
+            ctx.fillRect(
+              offsetX + area.x * scale,
+              offsetY + area.y * scale,
+              area.width * scale,
+              area.height * scale,
+            );
+            ctx.strokeStyle = "#e23d4d";
+            ctx.strokeRect(
+              offsetX + area.x * scale,
+              offsetY + area.y * scale,
+              area.width * scale,
+              area.height * scale,
+            );
+          }
+        }
+
+        drawAttackAreas(offsetX, offsetY, scale);
+        drawProjectiles(offsetX, offsetY, scale);
+
+        for (const player of players.values()) {
+          const x = offsetX + player.displayX * scale;
+          const y = offsetY + player.displayY * scale;
+          const self = player.id === $("player").value.trim();
+          const width = (player.width || 52) * scale;
+          const height = (player.height || 96) * scale;
+
+          ctx.fillStyle = self ? "#e23d4d" : "#2c6eea";
+          ctx.fillRect(x - width / 2, y - height, width, height);
+          ctx.strokeStyle = self ? "#8f1f2a" : "#174899";
+          ctx.strokeRect(x - width / 2, y - height, width, height);
+
+          ctx.fillStyle = "#172033";
+          ctx.font = "13px system-ui";
+          ctx.fillText(
+            player.name || player.id,
+            x + width / 2 + 6,
+            y - height + 12,
+          );
+        }
+
+        drawDamageTexts(offsetX, offsetY, scale);
+        drawSelfHud();
+        requestAnimationFrame(draw);
+      }
+
+      function terrainPoints(terrain) {
+        if (Array.isArray(terrain.points) && terrain.points.length > 0) {
+          return terrain.points;
+        }
+        return [
+          { x: terrain.x1 || 0, y: terrain.y1 || 0 },
+          { x: terrain.x2 || 0, y: terrain.y2 || 0 },
+        ];
+      }
+      function drawProjectiles(offsetX, offsetY, scale) {
+        for (const projectile of projectiles.values()) {
+          ctx.fillStyle = "rgba(88, 80, 236, 0.22)";
+          ctx.fillRect(
+            offsetX + projectile.displayX * scale,
+            offsetY + projectile.displayY * scale,
+            projectile.width * scale,
+            projectile.height * scale,
+          );
+          ctx.strokeStyle = "#5850ec";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            offsetX + projectile.displayX * scale,
+            offsetY + projectile.displayY * scale,
+            projectile.width * scale,
+            projectile.height * scale,
+          );
+        }
+      }
+
+      function drawDamageTexts(offsetX, offsetY, scale) {
+        const now = performance.now();
+        while (damageTexts.length > 0 && damageTexts[0].expiresAt <= now) {
+          damageTexts.shift();
+        }
+
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.font = "bold 18px system-ui";
+        for (const text of damageTexts) {
+          const age = now - text.createdAt;
+          const life = Math.max(1, text.expiresAt - text.createdAt);
+          const progress = Math.max(0, Math.min(1, age / life));
+          const x = offsetX + text.x * scale;
+          const y = offsetY + text.y * scale - progress * 30;
+
+          ctx.globalAlpha = 1 - progress;
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = text.stroke;
+          ctx.strokeText(text.label, x, y);
+          ctx.fillStyle = text.color;
+          ctx.fillText(text.label, x, y);
+        }
+        ctx.restore();
+      }
+
+      function drawAttackAreas(offsetX, offsetY, scale) {
+        const now = performance.now();
+        while (attacks.length > 0 && attacks[0].expiresAt <= now) {
+          attacks.shift();
+        }
+
+        for (const attack of attacks) {
+          const area = attack.area;
+          if (!area) continue;
+
+          ctx.fillStyle = attack.targetId
+            ? attack.isSkill
+              ? "rgba(88, 80, 236, 0.22)"
+              : "rgba(226, 61, 77, 0.22)"
+            : "rgba(44, 110, 234, 0.14)";
+          ctx.fillRect(
+            offsetX + area.x * scale,
+            offsetY + area.y * scale,
+            area.width * scale,
+            area.height * scale,
+          );
+          ctx.strokeStyle = attack.isSkill
+            ? "#5850ec"
+            : attack.targetId
+              ? "#e23d4d"
+              : "#2c6eea";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            offsetX + area.x * scale,
+            offsetY + area.y * scale,
+            area.width * scale,
+            area.height * scale,
+          );
+        }
+      }
+
+      function drawSelfHud() {
+        const self = players.get($("player").value.trim());
+        if (!self || !self.stat) return;
+
+        const x = 20;
+        const y = 24;
+        const width = 260;
+        const height = 16;
+        const panelHeight = 250;
+        const combat = self.combatStat || {};
+        const finalStat = self.stat.final || self.stat;
+
+        ctx.fillStyle = "rgba(17, 24, 39, 0.82)";
+        ctx.fillRect(x - 10, y - 14, width + 20, panelHeight);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "13px system-ui";
+        ctx.fillText(`Lv ${self.level || 1}  EXP ${self.exp || "0"}`, x, y);
+
+        ctx.font = "12px system-ui";
+        ctx.fillStyle = "#dbe7ff";
+        ctx.fillText(
+          `STR ${finalStat.strength || 0}   INT ${finalStat.intelligence || 0}`,
+          x,
+          y + 24,
+        );
+        ctx.fillText(
+          `AGI ${finalStat.agility || 0}   LUK ${finalStat.luck || 0}`,
+          x,
+          y + 44,
+        );
+
+        ctx.fillText(
+          `PATK ${combat.physicalAttackMin || 0}-${combat.physicalAttackMax || 0}   MATK ${combat.magicAttackMin || 0}-${combat.magicAttackMax || 0}`,
+          x,
+          y + 68,
+        );
+        ctx.fillText(
+          `PDEF ${combat.physicalDefense || 0}   MDEF ${combat.magicDefense || 0}`,
+          x,
+          y + 88,
+        );
+        ctx.fillText(
+          `SPD ${combat.moveSpeed || 0}   EVA ${combat.evasion || 0}   ACC ${combat.accuracy || 0}`,
+          x,
+          y + 108,
+        );
+        ctx.fillText(
+          `CRIT ${combat.critRate || 0}   CDMG ${combat.critDamage || 0}`,
+          x,
+          y + 128,
+        );
+        ctx.fillText(
+          `REC HP ${formatStatNumber(combat.hpRecovery)}/s   MP ${formatStatNumber(combat.mpRecovery)}/s`,
+          x,
+          y + 148,
+        );
+        ctx.fillText(
+          `ATK ${combat.attackStartupMs || 0}+${combat.attackActiveMs || 0}+${combat.attackRecoveryMs || 0}=${combat.attackIntervalMs || 0}ms`,
+          x,
+          y + 168,
+        );
+
+        drawStatBar(
+          x,
+          y + 188,
+          width,
+          height,
+          "#cf3d4d",
+          "HP",
+          finalStat.hp,
+          finalStat.hpMax,
+        );
+        drawStatBar(
+          x,
+          y + 216,
+          width,
+          height,
+          "#2c6eea",
+          "MP",
+          finalStat.mp,
+          finalStat.mpMax,
+        );
+      }
+
+      function drawStatBar(x, y, width, height, color, label, value, maxValue) {
+        const safeValue = Math.max(0, Number(value) || 0);
+        const safeMax = Math.max(1, Number(maxValue) || 1);
+        const ratio = Math.max(0, Math.min(1, safeValue / safeMax));
+
+        ctx.fillStyle = "#303642";
+        ctx.fillRect(x, y, width, height);
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, width * ratio, height);
+        ctx.strokeStyle = "#111827";
+        ctx.strokeRect(x, y, width, height);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px system-ui";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          `${label} ${safeValue} / ${safeMax}`,
+          x + 8,
+          y + height / 2,
+        );
+        ctx.textBaseline = "alphabetic";
+      }
+
+      $("connect").addEventListener("click", connect);
+      $("disconnect").addEventListener("click", disconnect);
+      for (const id of Object.values(statInputIds)) {
+        $(id).addEventListener("input", sendPrimaryStat);
+      }
+      loadRooms();
+      loadJobStats();
+
+      window.addEventListener("keydown", (event) => {
+        if (
+          event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLSelectElement
+        ) {
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          if (!pressedKeys.has(event.key)) usePortal();
+          pressedKeys.add(event.key);
+          return;
+        }
+
+        if (event.key === "c" || event.key === "C") {
+          event.preventDefault();
+          if (!pressedKeys.has("KeyC")) {
+            if (pressedKeys.has("ArrowDown")) drop();
+            else jump();
+          }
+          pressedKeys.add("KeyC");
+          return;
+        }
+
+        if (event.key === "x" || event.key === "X") {
+          event.preventDefault();
+          if (!pressedKeys.has("KeyX")) normalAttack();
+          pressedKeys.add("KeyX");
+          return;
+        }
+
+        if (event.key === "z" || event.key === "Z") {
+          event.preventDefault();
+          if (!pressedKeys.has("KeyZ")) castMagicMissile();
+          pressedKeys.add("KeyZ");
+          return;
+        }
+
+        if (
+          event.key !== "ArrowLeft" &&
+          event.key !== "ArrowRight" &&
+          event.key !== "ArrowDown"
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        pressedKeys.add(event.key);
+      });
+
+      window.addEventListener("keyup", (event) => {
+        pressedKeys.delete(event.key);
+        if (event.key === "c" || event.key === "C") pressedKeys.delete("KeyC");
+        if (event.key === "x" || event.key === "X") pressedKeys.delete("KeyX");
+        if (event.key === "z" || event.key === "Z") pressedKeys.delete("KeyZ");
+      });
+
+      function controlLoop(now) {
+        let inputX = 0;
+        if (pressedKeys.has("ArrowLeft")) inputX -= 1;
+        if (pressedKeys.has("ArrowRight")) inputX += 1;
+        sendInput(inputX);
+        requestAnimationFrame(controlLoop);
+      }
+
+      requestAnimationFrame(controlLoop);
+
+      requestAnimationFrame(draw);
+    </script>
+  </body>
+</html>

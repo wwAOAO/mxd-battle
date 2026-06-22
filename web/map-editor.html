@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MXD Map Editor</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: #1c2535;
+        background: #eef2f6;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr) 420px;
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      aside,
+      section {
+        min-height: 0;
+        border-right: 1px solid #d5dde8;
+        background: #ffffff;
+      }
+
+      aside {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        height: 100vh;
+        padding: 16px;
+        overflow: auto;
+      }
+
+      .stage {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        background: #dfe7df;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      h2 {
+        font-size: 14px;
+        color: #516077;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 700;
+        color: #39465b;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        width: 100%;
+        min-width: 0;
+        min-height: 34px;
+        border: 1px solid #c8d2df;
+        border-radius: 6px;
+        padding: 7px 9px;
+        font: inherit;
+        background: #ffffff;
+      }
+
+      textarea {
+        min-height: 260px;
+        resize: vertical;
+        font-family:
+          "Cascadia Code", Consolas, ui-monospace, SFMono-Regular, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #dbe7ff;
+        background: #111827;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 800;
+        color: #ffffff;
+        border-color: #2d6cdf;
+        background: #2d6cdf;
+      }
+
+      button.secondary {
+        color: #263246;
+        border-color: #c8d2df;
+        background: #edf2f8;
+      }
+
+      button.danger {
+        border-color: #cf3d4d;
+        background: #cf3d4d;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .triple {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .object-list {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .object-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+        min-height: 36px;
+        padding: 8px;
+        border: 1px solid #d8e0ea;
+        border-radius: 6px;
+        background: #f8fafc;
+        cursor: pointer;
+      }
+
+      .object-item strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .object-item.active {
+        border-color: #2d6cdf;
+        background: #eaf1ff;
+      }
+
+      .tag {
+        max-width: 80px;
+        overflow: hidden;
+        padding: 3px 7px;
+        border-radius: 999px;
+        color: #516077;
+        background: #e8edf4;
+        font-size: 11px;
+        font-weight: 800;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .panel {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #d8e0ea;
+        border-radius: 8px;
+        background: #fbfcfe;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+        touch-action: none;
+        user-select: none;
+      }
+
+      .json-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        overflow: auto;
+      }
+
+      .coordinate-panel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid #d8e0ea;
+        border-radius: 8px;
+        background: #fbfcfe;
+      }
+
+      .coordinate-value {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid #dbe4ef;
+        border-radius: 6px;
+        background: #f6f9fc;
+      }
+
+      .coordinate-value span {
+        color: #516077;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .coordinate-value strong {
+        overflow: hidden;
+        color: #172033;
+        font-size: 18px;
+        line-height: 1.1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .hint {
+        padding: 10px;
+        border: 1px solid #dbe4ef;
+        border-radius: 6px;
+        color: #4e5d73;
+        background: #f6f9fc;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      @media (max-width: 1180px) {
+        main {
+          grid-template-columns: 330px minmax(0, 1fr);
+        }
+
+        .json-panel {
+          grid-column: 1 / -1;
+          min-height: auto;
+          border-top: 1px solid #d5dde8;
+        }
+      }
+
+      @media (max-width: 760px) {
+        main {
+          grid-template-columns: 1fr;
+          height: auto;
+          overflow: visible;
+        }
+
+        aside,
+        section {
+          min-height: auto;
+        }
+
+        aside {
+          height: auto;
+        }
+
+        canvas {
+          height: 58vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside>
+        <h1>MXD Map Editor</h1>
+
+        <div class="panel">
+          <h2>Map</h2>
+          <label>
+            ID
+            <input id="mapId" />
+          </label>
+          <label>
+            Name
+            <input id="mapName" />
+          </label>
+          <div class="row">
+            <label>
+              Width
+              <input id="width" type="number" min="1" />
+            </label>
+            <label>
+              Height
+              <input id="height" type="number" min="1" />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Ground Y
+              <input id="groundY" type="number" min="0" />
+            </label>
+            <label>
+              Move Speed
+              <input id="moveSpeed" type="number" />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Gravity
+              <input id="gravity" type="number" />
+            </label>
+            <label>
+              Jump Velocity
+              <input id="jumpVelocity" type="number" />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Spawn X
+              <input id="spawnX" type="number" />
+            </label>
+            <label>
+              Spawn Y
+              <input id="spawnY" type="number" />
+            </label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Objects</h2>
+          <div class="toolbar">
+            <button id="addTerrain">Terrain</button>
+            <button id="addPlatform">Platform</button>
+            <button id="addWall">Wall</button>
+            <button id="addPortal">Portal</button>
+            <button id="copyObject" class="secondary">Copy</button>
+            <button id="deleteObject" class="danger">Delete</button>
+          </div>
+          <div id="objectList" class="object-list"></div>
+        </div>
+
+        <div id="editor" class="panel">
+          <h2>Selected</h2>
+          <div class="hint">
+            Select or add an object to edit its properties.
+          </div>
+        </div>
+      </aside>
+
+      <section class="stage">
+        <canvas id="canvas" width="1280" height="720"></canvas>
+      </section>
+
+      <section class="json-panel">
+        <div class="coordinate-panel" aria-label="Mouse coordinates">
+          <div class="coordinate-value">
+            <span>Mouse X</span>
+            <strong id="mouseX">-</strong>
+          </div>
+          <div class="coordinate-value">
+            <span>Mouse Y</span>
+            <strong id="mouseY">-</strong>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button id="download">Download JSON</button>
+          <button id="copy" class="secondary">Copy JSON</button>
+          <button id="loadJSON" class="secondary">Load JSON</button>
+        </div>
+        <input id="fileName" value="map_custom.json" />
+        <textarea id="jsonOutput" spellcheck="false"></textarea>
+        <div class="hint">
+          Drag objects on the canvas. The exported JSON matches the files in
+          config/maps.
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const map = {
+        id: "wild_custom",
+        name: "Wild Custom",
+        width: 2400,
+        height: 1500,
+        groundY: 1500,
+        gravity: 2600,
+        jumpVelocity: -980,
+        moveSpeed: 420,
+        spawn: { x: 180, y: 1500 },
+        terrain: [],
+        platforms: [],
+        walls: [],
+        portals: [],
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const canvas = $("canvas");
+      const ctx = canvas.getContext("2d");
+      let selected = null;
+      let drag = null;
+      let mouseWorld = null;
+
+      const fields = [
+        "mapId",
+        "mapName",
+        "width",
+        "height",
+        "groundY",
+        "gravity",
+        "jumpVelocity",
+        "moveSpeed",
+        "spawnX",
+        "spawnY",
+      ];
+
+      function syncForm() {
+        $("mapId").value = map.id;
+        $("mapName").value = map.name;
+        $("width").value = map.width;
+        $("height").value = map.height;
+        $("groundY").value = map.groundY;
+        $("gravity").value = map.gravity;
+        $("jumpVelocity").value = map.jumpVelocity;
+        $("moveSpeed").value = map.moveSpeed;
+        $("spawnX").value = map.spawn.x;
+        $("spawnY").value = map.spawn.y;
+      }
+
+      function readForm() {
+        map.id = $("mapId").value.trim();
+        map.name = $("mapName").value.trim();
+        map.width = numberValue("width");
+        map.height = numberValue("height");
+        map.groundY = numberValue("groundY");
+        map.gravity = numberValue("gravity");
+        map.jumpVelocity = numberValue("jumpVelocity");
+        map.moveSpeed = numberValue("moveSpeed");
+        map.spawn.x = numberValue("spawnX");
+        map.spawn.y = numberValue("spawnY");
+        render();
+      }
+
+      function numberValue(id) {
+        const value = Number($(id).value);
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      function allObjects() {
+        return [
+          ...map.terrain.map((item) => ({ type: "terrain", item })),
+          ...map.platforms.map((item) => ({ type: "platform", item })),
+          ...map.walls.map((item) => ({ type: "wall", item })),
+          ...map.portals.map((item) => ({ type: "portal", item })),
+        ];
+      }
+
+      function objectRect(entry) {
+        if (entry.type === "terrain") {
+          const points = terrainPoints(entry.item);
+          const xs = points.map((point) => point.x);
+          const ys = points.map((point) => point.y);
+          const minX = Math.min(...xs);
+          const maxX = Math.max(...xs);
+          const minY = Math.min(...ys);
+          const maxY = Math.max(...ys);
+          return {
+            x: minX,
+            y: minY - 8,
+            width: Math.max(12, maxX - minX),
+            height: Math.max(16, maxY - minY + 16),
+          };
+        }
+        if (entry.type === "portal") return entry.item.area;
+        return entry.item;
+      }
+
+      function normalizeTerrain(terrain) {
+        const points =
+          Array.isArray(terrain.points) && terrain.points.length > 0
+            ? terrain.points
+            : [
+                { x: Number(terrain.x1) || 0, y: Number(terrain.y1) || 0 },
+                { x: Number(terrain.x2) || 0, y: Number(terrain.y2) || 0 },
+              ];
+        return {
+          id: terrain.id || makeId("terrain", map.terrain),
+          points: points.map((point) => ({
+            x: Number(point.x) || 0,
+            y: Number(point.y) || 0,
+          })),
+        };
+      }
+
+      function terrainPoints(terrain) {
+        if (!Array.isArray(terrain.points) || terrain.points.length === 0) {
+          terrain.points = [
+            { x: Number(terrain.x1) || 0, y: Number(terrain.y1) || 0 },
+            { x: Number(terrain.x2) || 0, y: Number(terrain.y2) || 0 },
+          ];
+          delete terrain.x1;
+          delete terrain.y1;
+          delete terrain.x2;
+          delete terrain.y2;
+        }
+        return terrain.points;
+      }
+
+      function moveTerrain(terrain, dx, dy) {
+        for (const point of terrainPoints(terrain)) {
+          point.x += dx;
+          point.y += dy;
+        }
+      }
+
+      function objectId(entry) {
+        return entry.item.id || "(unnamed)";
+      }
+
+      function makeId(prefix, list) {
+        let index = list.length + 1;
+        let id = `${prefix}_${index}`;
+        const existing = new Set(allObjects().map((entry) => objectId(entry)));
+        while (existing.has(id)) {
+          index += 1;
+          id = `${prefix}_${index}`;
+        }
+        return id;
+      }
+
+      function addTerrain() {
+        const item = {
+          id: makeId("terrain", map.terrain),
+          points: [
+            { x: 100, y: map.groundY },
+            { x: 300, y: map.groundY - 80 },
+            { x: 500, y: map.groundY - 100 },
+          ],
+        };
+        map.terrain.push(item);
+        selectObject("terrain", item);
+      }
+
+      function addPlatform() {
+        const item = {
+          id: makeId("platform", map.platforms),
+          x: 200,
+          y: map.groundY - 200,
+          width: 260,
+          height: 40,
+        };
+        map.platforms.push(item);
+        selectObject("platform", item);
+      }
+
+      function addWall() {
+        const item = {
+          id: makeId("wall", map.walls),
+          x: 600,
+          y: map.groundY - 260,
+          width: 80,
+          height: 260,
+        };
+        map.walls.push(item);
+        selectObject("wall", item);
+      }
+
+      function addPortal() {
+        const item = {
+          id: makeId("portal", map.portals),
+          targetRoomId: "Treasure_Island.city",
+          area: {
+            x: map.width - 80,
+            y: map.groundY - 220,
+            width: 60,
+            height: 220,
+          },
+          target: { x: 120, y: map.groundY },
+        };
+        map.portals.push(item);
+        selectObject("portal", item);
+      }
+
+      function selectObject(type, item) {
+        selected = { type, item };
+        render();
+      }
+
+      function deleteSelected() {
+        if (!selected) return;
+        const list =
+          selected.type === "terrain"
+            ? map.terrain
+            : selected.type === "platform"
+              ? map.platforms
+              : selected.type === "wall"
+                ? map.walls
+                : map.portals;
+        const index = list.indexOf(selected.item);
+        if (index >= 0) list.splice(index, 1);
+        selected = null;
+        render();
+      }
+
+      function isEditingText(event) {
+        const target = event.target;
+        if (!target) return false;
+        const tagName = target.tagName && target.tagName.toLowerCase();
+        return (
+          tagName === "input" ||
+          tagName === "textarea" ||
+          target.isContentEditable
+        );
+      }
+
+      function copySelected() {
+        if (!selected) return;
+
+        const clone = JSON.parse(JSON.stringify(selected.item));
+        const list =
+          selected.type === "terrain"
+            ? map.terrain
+            : selected.type === "platform"
+              ? map.platforms
+              : selected.type === "wall"
+                ? map.walls
+                : map.portals;
+        clone.id = makeId(selected.type, list);
+        offsetObject(selected.type, clone, 40, 40);
+        list.push(clone);
+        selectObject(selected.type, clone);
+      }
+
+      function offsetObject(type, item, dx, dy) {
+        if (type === "terrain") {
+          moveTerrain(item, dx, dy);
+          return;
+        }
+        if (type === "portal") {
+          item.area.x += dx;
+          item.area.y += dy;
+          item.target.x += dx;
+          item.target.y += dy;
+          return;
+        }
+        item.x += dx;
+        item.y += dy;
+      }
+
+      function renderObjectList() {
+        const list = $("objectList");
+        list.textContent = "";
+        for (const entry of allObjects()) {
+          const row = document.createElement("div");
+          row.className =
+            "object-item" +
+            (selected && selected.item === entry.item ? " active" : "");
+          row.innerHTML = `<strong>${objectId(entry)}</strong><span class="tag">${entry.type}</span>`;
+          row.addEventListener("click", () =>
+            selectObject(entry.type, entry.item),
+          );
+          list.appendChild(row);
+        }
+      }
+
+      function renderSelectedEditor() {
+        const editor = $("editor");
+        editor.textContent = "";
+
+        const title = document.createElement("h2");
+        title.textContent = "Selected";
+        editor.appendChild(title);
+
+        if (!selected) {
+          const hint = document.createElement("div");
+          hint.className = "hint";
+          hint.textContent = "Select or add an object to edit its properties.";
+          editor.appendChild(hint);
+          return;
+        }
+
+        addTextInput(editor, "ID", selected.item, "id");
+        if (selected.type === "terrain") {
+          const points = terrainPoints(selected.item);
+          points.forEach((point, index) => {
+            addNumberRow(editor, [
+              [`P${index + 1} X`, point, "x"],
+              [`P${index + 1} Y`, point, "y"],
+            ]);
+          });
+          const row = document.createElement("div");
+          row.className = "row";
+          const addButton = document.createElement("button");
+          addButton.textContent = "Add Point";
+          addButton.type = "button";
+          addButton.addEventListener("click", () => {
+            const last = points[points.length - 1] || {
+              x: 100,
+              y: map.groundY,
+            };
+            points.push({ x: last.x + 120, y: last.y });
+            refreshAfterObjectEdit();
+            renderSelectedEditor();
+          });
+          const removeButton = document.createElement("button");
+          removeButton.textContent = "Delete Point";
+          removeButton.type = "button";
+          removeButton.className = "danger";
+          removeButton.disabled = points.length <= 2;
+          removeButton.addEventListener("click", () => {
+            if (points.length > 2) points.pop();
+            refreshAfterObjectEdit();
+            renderSelectedEditor();
+          });
+          row.appendChild(addButton);
+          row.appendChild(removeButton);
+          editor.appendChild(row);
+          return;
+        }
+
+        const rect = objectRect(selected);
+        addNumberRow(editor, [
+          ["X", rect, "x"],
+          ["Y", rect, "y"],
+        ]);
+        addNumberRow(editor, [
+          ["Width", rect, "width"],
+          ["Height", rect, "height"],
+        ]);
+
+        if (selected.type === "platform") {
+          addCheckbox(editor, "Solid sides", selected.item, "solidSides");
+          addCheckbox(editor, "Solid ceiling", selected.item, "solidCeiling");
+        }
+
+        if (selected.type === "portal") {
+          addTextInput(editor, "Target Room ID", selected.item, "targetRoomId");
+          addNumberRow(editor, [
+            ["Target X", selected.item.target, "x"],
+            ["Target Y", selected.item.target, "y"],
+          ]);
+        }
+      }
+
+      function addTextInput(parent, labelText, object, key) {
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        const input = document.createElement("input");
+        input.value = object[key] || "";
+        input.addEventListener("input", () => {
+          object[key] = input.value.trim();
+          refreshAfterObjectEdit();
+        });
+        label.appendChild(input);
+        parent.appendChild(label);
+      }
+
+      function addNumberRow(parent, definitions) {
+        const row = document.createElement("div");
+        row.className = definitions.length === 3 ? "triple" : "row";
+        for (const [labelText, object, key] of definitions) {
+          const label = document.createElement("label");
+          label.textContent = labelText;
+          const input = document.createElement("input");
+          input.type = "number";
+          input.value = object[key];
+          input.addEventListener("input", () => {
+            object[key] = Number(input.value) || 0;
+            refreshAfterObjectEdit();
+          });
+          label.appendChild(input);
+          row.appendChild(label);
+        }
+        parent.appendChild(row);
+      }
+
+      function addCheckbox(parent, labelText, object, key) {
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = Boolean(object[key]);
+        input.addEventListener("change", () => {
+          if (input.checked) object[key] = true;
+          else delete object[key];
+          refreshAfterObjectEdit();
+        });
+        label.appendChild(input);
+        parent.appendChild(label);
+      }
+
+      function exportMap() {
+        return JSON.stringify(map, null, 2);
+      }
+
+      function normalizeMap(nextMap) {
+        return {
+          id: nextMap.id || "wild_custom",
+          name: nextMap.name || nextMap.id || "Wild Custom",
+          width: Number(nextMap.width) || 2400,
+          height: Number(nextMap.height) || 1500,
+          groundY: Number(nextMap.groundY) || Number(nextMap.height) || 1500,
+          gravity: Number(nextMap.gravity) || 2600,
+          jumpVelocity: Number(nextMap.jumpVelocity) || -980,
+          moveSpeed: Number(nextMap.moveSpeed) || 420,
+          spawn: {
+            x: Number(nextMap.spawn && nextMap.spawn.x) || 0,
+            y: Number(nextMap.spawn && nextMap.spawn.y) || 0,
+          },
+          terrain: Array.isArray(nextMap.terrain)
+            ? nextMap.terrain.map(normalizeTerrain)
+            : [],
+          platforms: Array.isArray(nextMap.platforms) ? nextMap.platforms : [],
+          walls: Array.isArray(nextMap.walls) ? nextMap.walls : [],
+          portals: Array.isArray(nextMap.portals) ? nextMap.portals : [],
+        };
+      }
+
+      function loadJSONFromOutput() {
+        let nextMap;
+        try {
+          nextMap = JSON.parse($("jsonOutput").value);
+        } catch (error) {
+          window.alert(`Invalid JSON: ${error.message}`);
+          return;
+        }
+
+        Object.assign(map, normalizeMap(nextMap));
+        selected = null;
+        drag = null;
+        $("fileName").value = `${map.id || "map_custom"}.json`;
+        syncForm();
+        render();
+      }
+
+      function renderJSON() {
+        $("jsonOutput").value = exportMap();
+      }
+
+      function renderMouseCoordinates() {
+        $("mouseX").textContent = mouseWorld ? Math.round(mouseWorld.x) : "-";
+        $("mouseY").textContent = mouseWorld ? Math.round(mouseWorld.y) : "-";
+      }
+
+      function updateMouseCoordinates(event) {
+        mouseWorld = screenToWorld(pointerPoint(event));
+        renderMouseCoordinates();
+      }
+
+      function fit() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(640, Math.floor(rect.width * devicePixelRatio));
+        canvas.height = Math.max(
+          420,
+          Math.floor(rect.height * devicePixelRatio),
+        );
+      }
+
+      function viewport() {
+        const scale =
+          Math.min(canvas.width / map.width, canvas.height / map.height) * 0.94;
+        const offsetX = (canvas.width - map.width * scale) / 2;
+        const offsetY = (canvas.height - map.height * scale) / 2;
+        return { scale, offsetX, offsetY };
+      }
+
+      function worldToScreen(point) {
+        const view = viewport();
+        return {
+          x: view.offsetX + point.x * view.scale,
+          y: view.offsetY + point.y * view.scale,
+        };
+      }
+
+      function screenToWorld(point) {
+        const view = viewport();
+        return {
+          x: (point.x - view.offsetX) / view.scale,
+          y: (point.y - view.offsetY) / view.scale,
+        };
+      }
+
+      function draw() {
+        fit();
+        const view = viewport();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#e3eee4";
+        ctx.fillRect(
+          view.offsetX,
+          view.offsetY,
+          map.width * view.scale,
+          map.height * view.scale,
+        );
+        ctx.strokeStyle = "#6d9679";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          view.offsetX,
+          view.offsetY,
+          map.width * view.scale,
+          map.height * view.scale,
+        );
+
+        ctx.strokeStyle = "rgba(45, 108, 223, 0.12)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= map.width; x += 100) {
+          const a = worldToScreen({ x, y: 0 });
+          const b = worldToScreen({ x, y: map.height });
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= map.height; y += 100) {
+          const a = worldToScreen({ x: 0, y });
+          const b = worldToScreen({ x: map.width, y });
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+
+        const groundA = worldToScreen({ x: 0, y: map.groundY });
+        const groundB = worldToScreen({ x: map.width, y: map.groundY });
+        ctx.strokeStyle = "#607b4b";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(groundA.x, groundA.y);
+        ctx.lineTo(groundB.x, groundB.y);
+        ctx.stroke();
+
+        for (const terrain of map.terrain) {
+          drawTerrain(terrain);
+        }
+        for (const platform of map.platforms) {
+          drawRect(platform, "#8b9468", "#59643e");
+          if (platform.solidSides || platform.solidCeiling) drawFlags(platform);
+        }
+        for (const wall of map.walls) {
+          drawRect(wall, "#5c6572", "#303743");
+        }
+        for (const portal of map.portals) {
+          drawRect(portal.area, "rgba(210, 58, 76, 0.22)", "#d23a4c");
+        }
+
+        const spawn = worldToScreen(map.spawn);
+        ctx.fillStyle = "#2d6cdf";
+        ctx.beginPath();
+        ctx.arc(spawn.x, spawn.y, 6 * devicePixelRatio, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (selected) {
+          ctx.strokeStyle = "#f4b400";
+          ctx.lineWidth = 3;
+          if (selected.type === "terrain") {
+            const points = terrainPoints(selected.item).map(worldToScreen);
+            if (points.length >= 2) {
+              ctx.beginPath();
+              ctx.moveTo(points[0].x, points[0].y);
+              for (let i = 1; i < points.length; i++)
+                ctx.lineTo(points[i].x, points[i].y);
+              ctx.stroke();
+            }
+            for (const point of points) drawHandle(point, "#f4b400");
+          } else {
+            const rect = objectRect(selected);
+            const p = worldToScreen({ x: rect.x, y: rect.y });
+            ctx.strokeRect(
+              p.x,
+              p.y,
+              rect.width * view.scale,
+              rect.height * view.scale,
+            );
+            drawRectHandles(rect);
+          }
+        }
+      }
+
+      function drawRect(rect, fill, stroke) {
+        const view = viewport();
+        const p = worldToScreen({ x: rect.x, y: rect.y });
+        ctx.fillStyle = fill;
+        ctx.fillRect(
+          p.x,
+          p.y,
+          rect.width * view.scale,
+          rect.height * view.scale,
+        );
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          p.x,
+          p.y,
+          rect.width * view.scale,
+          rect.height * view.scale,
+        );
+      }
+
+      function drawTerrain(terrain) {
+        const points = terrainPoints(terrain).map(worldToScreen);
+        if (points.length < 2) return;
+        ctx.strokeStyle = "#3f7d4a";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = "#3f7d4a";
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 4 * devicePixelRatio, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawHandle(point, color) {
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#172033";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 7 * devicePixelRatio, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      function drawRectHandles(rect) {
+        const view = viewport();
+        const left = view.offsetX + rect.x * view.scale;
+        const top = view.offsetY + rect.y * view.scale;
+        const right = left + rect.width * view.scale;
+        const bottom = top + rect.height * view.scale;
+        const points = [
+          { x: left, y: top },
+          { x: right, y: top },
+          { x: left, y: bottom },
+          { x: right, y: bottom },
+          { x: (left + right) / 2, y: top },
+          { x: (left + right) / 2, y: bottom },
+          { x: left, y: (top + bottom) / 2 },
+          { x: right, y: (top + bottom) / 2 },
+        ];
+        for (const point of points) drawHandle(point, "#f4b400");
+      }
+
+      function drawFlags(platform) {
+        const p = worldToScreen({ x: platform.x + 6, y: platform.y + 16 });
+        ctx.fillStyle = "#172033";
+        ctx.font = `${12 * devicePixelRatio}px system-ui`;
+        ctx.fillText(
+          `${platform.solidSides ? "S" : ""}${platform.solidCeiling ? "C" : ""}`,
+          p.x,
+          p.y,
+        );
+      }
+
+      function hitTest(point) {
+        const worldPoint = screenToWorld(point);
+        const objects = allObjects().slice().reverse();
+        for (const entry of objects) {
+          if (entry.type === "terrain") {
+            const endpoint = hitTerrainEndpoint(entry.item, point);
+            if (endpoint) return { ...entry, handle: endpoint };
+          }
+        }
+        for (const entry of objects) {
+          if (entry.type !== "terrain") {
+            const handle = hitRectHandle(objectRect(entry), point);
+            if (handle) return { ...entry, handle };
+          }
+        }
+        return objects.find((entry) => {
+          const rect = objectRect(entry);
+          return (
+            worldPoint.x >= rect.x &&
+            worldPoint.x <= rect.x + rect.width &&
+            worldPoint.y >= rect.y &&
+            worldPoint.y <= rect.y + rect.height
+          );
+        });
+      }
+
+      function hitTerrainEndpoint(terrain, point) {
+        const radius = 10 * devicePixelRatio;
+        const points = terrainPoints(terrain);
+        for (let i = 0; i < points.length; i++) {
+          if (distance(point, worldToScreen(points[i])) <= radius)
+            return `point-${i}`;
+        }
+        return "";
+      }
+
+      function distance(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function hitRectHandle(rect, point) {
+        const view = viewport();
+        const worldPoint = screenToWorld(point);
+        const tolerance = 8 / view.scale;
+        const nearLeft = Math.abs(worldPoint.x - rect.x) <= tolerance;
+        const nearRight =
+          Math.abs(worldPoint.x - (rect.x + rect.width)) <= tolerance;
+        const nearTop = Math.abs(worldPoint.y - rect.y) <= tolerance;
+        const nearBottom =
+          Math.abs(worldPoint.y - (rect.y + rect.height)) <= tolerance;
+        const insideX =
+          worldPoint.x >= rect.x - tolerance &&
+          worldPoint.x <= rect.x + rect.width + tolerance;
+        const insideY =
+          worldPoint.y >= rect.y - tolerance &&
+          worldPoint.y <= rect.y + rect.height + tolerance;
+
+        if (nearLeft && nearTop) return "resize-nw";
+        if (nearRight && nearTop) return "resize-ne";
+        if (nearLeft && nearBottom) return "resize-sw";
+        if (nearRight && nearBottom) return "resize-se";
+        if (nearTop && insideX) return "resize-n";
+        if (nearBottom && insideX) return "resize-s";
+        if (nearLeft && insideY) return "resize-w";
+        if (nearRight && insideY) return "resize-e";
+        return "";
+      }
+
+      function resizeRect(rect, drag, point) {
+        const minSize = 8;
+        const handle = drag.handle;
+        const dx = point.x - drag.startX;
+        const dy = point.y - drag.startY;
+        if (handle.includes("w")) {
+          const right = drag.original.x + drag.original.width;
+          rect.x = Math.min(right - minSize, Math.round(drag.original.x + dx));
+          rect.width = Math.round(right - rect.x);
+        } else if (handle.includes("e")) {
+          rect.width = Math.max(minSize, Math.round(drag.original.width + dx));
+        }
+        if (handle.includes("n")) {
+          const bottom = drag.original.y + drag.original.height;
+          rect.y = Math.min(bottom - minSize, Math.round(drag.original.y + dy));
+          rect.height = Math.round(bottom - rect.y);
+        } else if (handle.includes("s")) {
+          rect.height = Math.max(
+            minSize,
+            Math.round(drag.original.height + dy),
+          );
+        }
+      }
+
+      function render() {
+        renderObjectList();
+        renderSelectedEditor();
+        renderJSON();
+        draw();
+      }
+
+      function refreshAfterObjectEdit() {
+        renderObjectList();
+        renderJSON();
+        draw();
+      }
+
+      function pointerPoint(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (event.clientX - rect.left) * devicePixelRatio,
+          y: (event.clientY - rect.top) * devicePixelRatio,
+        };
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        updateMouseCoordinates(event);
+        const point = pointerPoint(event);
+        const hit = hitTest(point);
+        if (!hit) {
+          selected = null;
+          render();
+          return;
+        }
+        selectObject(hit.type, hit.item);
+        const worldPoint = screenToWorld(point);
+        const rect = objectRect(hit);
+        const handle = event.ctrlKey ? "body" : hit.handle || "body";
+        drag = {
+          entry: hit,
+          handle,
+          dx: worldPoint.x - rect.x,
+          dy: worldPoint.y - rect.y,
+          startX: worldPoint.x,
+          startY: worldPoint.y,
+          original: { ...rect },
+        };
+        canvas.setPointerCapture(event.pointerId);
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        updateMouseCoordinates(event);
+        if (!drag) {
+          const hit = hitTest(pointerPoint(event));
+          canvas.style.cursor = cursorForHandle(hit && hit.handle);
+          return;
+        }
+        event.preventDefault();
+        const worldPoint = screenToWorld(pointerPoint(event));
+        if (drag.entry.type === "terrain") {
+          const terrain = drag.entry.item;
+          if (drag.handle && drag.handle.startsWith("point-")) {
+            const pointIndex = Number(drag.handle.slice("point-".length));
+            const point = terrainPoints(terrain)[pointIndex];
+            if (point) {
+              point.x = Math.round(worldPoint.x);
+              point.y = Math.round(worldPoint.y);
+            }
+          } else {
+            const rect = objectRect(drag.entry);
+            const nextX = Math.round(worldPoint.x - drag.dx);
+            const nextY = Math.round(worldPoint.y - drag.dy);
+            const dx = nextX - rect.x;
+            const dy = nextY - rect.y;
+            moveTerrain(terrain, dx, dy);
+          }
+        } else {
+          const rect = objectRect(drag.entry);
+          if (drag.handle && drag.handle.startsWith("resize-")) {
+            resizeRect(rect, drag, worldPoint);
+          } else {
+            rect.x = Math.round(worldPoint.x - drag.dx);
+            rect.y = Math.round(worldPoint.y - drag.dy);
+          }
+        }
+        render();
+      });
+
+      canvas.addEventListener("pointerup", (event) => {
+        event.preventDefault();
+        updateMouseCoordinates(event);
+        drag = null;
+      });
+
+      canvas.addEventListener("pointercancel", () => {
+        drag = null;
+      });
+
+      function cursorForHandle(handle) {
+        switch (handle) {
+          case "resize-n":
+          case "resize-s":
+            return "ns-resize";
+          case "resize-e":
+          case "resize-w":
+            return "ew-resize";
+          case "resize-ne":
+          case "resize-sw":
+            return "nesw-resize";
+          case "resize-nw":
+          case "resize-se":
+            return "nwse-resize";
+          case "start":
+          case "end":
+            return "pointer";
+          default:
+            if (typeof handle === "string" && handle.startsWith("point-"))
+              return "pointer";
+            return "crosshair";
+        }
+      }
+
+      window.addEventListener(
+        "wheel",
+        (event) => {
+          if (drag) event.preventDefault();
+        },
+        { passive: false },
+      );
+
+      for (const id of fields) $(id).addEventListener("input", readForm);
+      $("addTerrain").addEventListener("click", addTerrain);
+      $("addPlatform").addEventListener("click", addPlatform);
+      $("addWall").addEventListener("click", addWall);
+      $("addPortal").addEventListener("click", addPortal);
+      $("copyObject").addEventListener("click", copySelected);
+      $("deleteObject").addEventListener("click", deleteSelected);
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key !== "Delete" || isEditingText(event)) return;
+        event.preventDefault();
+        deleteSelected();
+      });
+
+      $("download").addEventListener("click", () => {
+        const blob = new Blob([exportMap()], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = $("fileName").value.trim() || `${map.id}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      $("copy").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(exportMap());
+      });
+      $("loadJSON").addEventListener("click", loadJSONFromOutput);
+
+      window.addEventListener("resize", draw);
+      syncForm();
+      renderMouseCoordinates();
+      render();
+    </script>
+  </body>
+</html>
