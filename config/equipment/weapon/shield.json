@@ -1,0 +1,16 @@
+﻿{
+  "wooden_shield": {
+    "id": "wooden_shield",
+    "name": "Wooden Shield",
+    "slot": "weapon_sub",
+    "stat": {
+      "hpMax": 60
+    },
+    "minLevel": 3,
+    "allowedJobs": ["warrior"],
+    "combatStat": {
+      "physicalDefense": 10,
+      "attackRecoveryMs": -40
+    }
+  }
+}

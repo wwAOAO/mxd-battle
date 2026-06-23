@@ -4,7 +4,7 @@
     "name": "Magic Missile",
     "mpCost": 12,
     "cooldownMs": 900,
-    "startupMs": 300,
+    "startupMs": 120,
     "activeMs": 80,
     "recoveryMs": 420,
     "range": 420,

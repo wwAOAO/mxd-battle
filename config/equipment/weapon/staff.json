@@ -1,0 +1,23 @@
+﻿{
+  "apprentice_staff": {
+    "id": "apprentice_staff",
+    "name": "Apprentice Staff",
+    "slot": "weapon_main",
+    "slotCount": 2,
+    "stat": {
+      "intelligence": 6,
+      "mpMax": 35
+    },
+    "requirement": {
+      "intelligence": 12
+    },
+    "minLevel": 5,
+    "allowedJobs": ["mage"],
+    "combatStat": {
+      "magicAttackMin": 10,
+      "magicAttackMax": 16,
+      "castSpeed": 120,
+      "attackIntervalMs": -80
+    }
+  }
+}

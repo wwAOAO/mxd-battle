@@ -334,6 +334,13 @@ func terrainLandingY(mapDef world.MapConfig, player Player) float64 {
 		landingY = centerY
 	}
 
+	// While moving upward, only the player's center can claim terrain support.
+	// This prevents the jump arc from visually "sliding" onto higher ground
+	// just because a side edge brushes the platform lip mid-air.
+	if player.VY < 0 {
+		return landingY
+	}
+
 	for _, x := range []float64{PlayerLeft(player), PlayerRight(player)} {
 		if terrainSideBetween(mapDef, player.X, x, player.Y) {
 			continue

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -84,6 +86,14 @@ func NormalizeEquipmentConfigs(configs EquipmentConfigs) EquipmentConfigs {
 }
 
 func LoadEquipmentConfigs(path string) (EquipmentConfigs, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat equipment config: %w", err)
+	}
+	if info.IsDir() {
+		return loadEquipmentConfigsDir(path)
+	}
+
 	payload, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read equipment config: %w", err)
@@ -97,6 +107,62 @@ func LoadEquipmentConfigs(path string) (EquipmentConfigs, error) {
 		return nil, fmt.Errorf("equipment config must define equipments")
 	}
 	return NormalizeEquipmentConfigs(configs), nil
+}
+
+func loadEquipmentConfigsDir(dir string) (EquipmentConfigs, error) {
+	jsonFiles, err := collectEquipmentJSONFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(jsonFiles) == 0 {
+		return nil, fmt.Errorf("equipment config dir must contain json files")
+	}
+
+	merged := make(EquipmentConfigs)
+	for _, filePath := range jsonFiles {
+		payload, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("read equipment config %s: %w", filePath, err)
+		}
+
+		var partial EquipmentConfigs
+		if err := json.Unmarshal(payload, &partial); err != nil {
+			return nil, fmt.Errorf("decode equipment config %s: %w", filePath, err)
+		}
+
+		for id, cfg := range partial {
+			if _, exists := merged[id]; exists {
+				return nil, fmt.Errorf("duplicate equipment id %q in %s", id, filePath)
+			}
+			merged[id] = cfg
+		}
+	}
+
+	if len(merged) == 0 {
+		return nil, fmt.Errorf("equipment config must define equipments")
+	}
+	return NormalizeEquipmentConfigs(merged), nil
+}
+
+func collectEquipmentJSONFiles(dir string) ([]string, error) {
+	files := make([]string, 0)
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(entry.Name()), ".json") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walk equipment config dir: %w", err)
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 func AggregateEquipmentStat(equipmentIDs []string, configs EquipmentConfigs) BaseStat {

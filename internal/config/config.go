@@ -26,7 +26,7 @@ func Load() Config {
 		WorldMapsFile:      getEnv("WORLD_MAPS_FILE", "config/world_maps.json"),
 		JobStatsFile:       getEnv("JOB_STATS_FILE", "config/job_stats.json"),
 		SkillStatsFile:     getEnv("SKILL_STATS_FILE", "config/skill_stats.json"),
-		EquipmentStatsFile: getEnv("EQUIPMENT_STATS_FILE", "config/equipment_stats.json"),
+		EquipmentStatsFile: getEnv("EQUIPMENT_STATS_FILE", "config/equipment"),
 	}
 }
 

@@ -1611,6 +1611,14 @@ func TestHubDangerousWoodsSingleJumpClearsTerrainStep(t *testing.T) {
 
 	for i := 0; i < 18; i++ {
 		hub.StepPhysics(testTime().Add(time.Duration(i)*50*time.Millisecond), 0.05)
+		state, err := hub.State(RoomX)
+		if err != nil {
+			t.Fatalf("state during jump: %v", err)
+		}
+		player := state.Players["dangerous-jumper"]
+		if player.OnGround && player.X > 793+DefaultPlayerWidth/2 && player.Y < 1100 {
+			t.Fatalf("expected jump arc to not land onto upper terrain before clearing side, got %+v", player)
+		}
 	}
 
 	state, err := hub.State(RoomX)

@@ -1,0 +1,34 @@
+﻿{
+  "silver_ring": {
+    "id": "silver_ring",
+    "name": "Silver Ring",
+    "slot": "ring",
+    "stat": {
+      "luck": 4
+    },
+    "requirement": {
+      "luck": 4
+    },
+    "minLevel": 2,
+    "combatStat": {
+      "critRate": 2
+    }
+  },
+  "gold_ring": {
+    "id": "gold_ring",
+    "name": "Gold Ring",
+    "slot": "ring",
+    "stat": {
+      "intelligence": 3
+    },
+    "requirement": {
+      "intelligence": 3
+    },
+    "minLevel": 2,
+    "combatStat": {
+      "magicAttackMin": 4,
+      "magicAttackMax": 8,
+      "mpRecovery": 0.25
+    }
+  }
+}
