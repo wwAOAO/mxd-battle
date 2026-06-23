@@ -74,6 +74,11 @@ func main() {
 		logger.Error("failed to load skill config", "path", cfg.SkillStatsFile, "error", err)
 		os.Exit(1)
 	}
+	equipmentStats, err := combat.LoadEquipmentConfigs(cfg.EquipmentStatsFile)
+	if err != nil {
+		logger.Error("failed to load equipment config", "path", cfg.EquipmentStatsFile, "error", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -108,7 +113,7 @@ func main() {
 		publisher = client
 	}
 
-	hub, err := scene.NewHubWithJobs(logger, publisher, worldMaps, jobStats, skillStats)
+	hub, err := scene.NewHubWithJobsAndEquipment(logger, publisher, worldMaps, jobStats, equipmentStats, skillStats)
 	if err != nil {
 		logger.Error("failed to initialize scene hub", "error", err)
 		os.Exit(1)

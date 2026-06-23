@@ -74,11 +74,12 @@ type Hub struct {
 	logger    *slog.Logger
 	publisher EventPublisher
 
-	mu      sync.RWMutex
-	rooms   map[string]*room
-	players map[string]string
-	jobs    combat.JobStatConfigs
-	skills  combat.SkillConfigs
+	mu         sync.RWMutex
+	rooms      map[string]*room
+	players    map[string]string
+	jobs       combat.JobStatConfigs
+	skills     combat.SkillConfigs
+	equipments combat.EquipmentConfigs
 }
 
 func NewHub(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig) (*Hub, error) {
@@ -86,6 +87,10 @@ func NewHub(logger *slog.Logger, publisher EventPublisher, maps map[string]world
 }
 
 func NewHubWithJobs(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig, jobs combat.JobStatConfigs, skillConfigs ...combat.SkillConfigs) (*Hub, error) {
+	return NewHubWithJobsAndEquipment(logger, publisher, maps, jobs, nil, skillConfigs...)
+}
+
+func NewHubWithJobsAndEquipment(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs, skillConfigs ...combat.SkillConfigs) (*Hub, error) {
 	if err := world.ValidateRoomMaps(maps); err != nil {
 		return nil, err
 	}
@@ -103,12 +108,13 @@ func NewHubWithJobs(logger *slog.Logger, publisher EventPublisher, maps map[stri
 	}
 
 	return &Hub{
-		logger:    logger,
-		publisher: publisher,
-		rooms:     rooms,
-		players:   make(map[string]string),
-		jobs:      jobs,
-		skills:    skills,
+		logger:     logger,
+		publisher:  publisher,
+		rooms:      rooms,
+		players:    make(map[string]string),
+		jobs:       jobs,
+		skills:     skills,
+		equipments: equipmentConfigs,
 	}, nil
 }
 
@@ -131,6 +137,17 @@ func (h *Hub) JobStatConfigs() combat.JobStatConfigs {
 	configs := make(combat.JobStatConfigs, len(h.jobs))
 	for code, config := range h.jobs {
 		configs[code] = config
+	}
+	return configs
+}
+
+func (h *Hub) EquipmentConfigs() combat.EquipmentConfigs {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	configs := make(combat.EquipmentConfigs, len(h.equipments))
+	for id, config := range h.equipments {
+		configs[id] = config
 	}
 	return configs
 }
@@ -189,7 +206,7 @@ func (h *Hub) Join(roomID string, player Player, peer Peer) (RoomState, error) {
 		delete(previousRoom.peers, player.ID)
 	}
 
-	player = preparePlayerForRoom(player, currentRoom, h.jobs, now)
+	player = preparePlayerForRoom(player, currentRoom, h.jobs, h.equipments, now)
 	currentRoom.players[player.ID] = player
 	currentRoom.peers[player.ID] = peer
 	h.players[player.ID] = roomID
@@ -240,7 +257,7 @@ func (h *Hub) Move(playerID string, x float64, y float64) (Player, bool) {
 	player.X = x
 	player.UpdatedAt = now
 
-	transition := resolvePlayerMovementFromWithJobs(currentRoom, player, currentRoom.players[playerID].X, player.Y, h.jobs, time.Time{})
+	transition := resolvePlayerMovementFromWithJobs(currentRoom, player, currentRoom.players[playerID].X, player.Y, h.jobs, h.equipments, time.Time{})
 	currentRoom.players[playerID] = transition.Player
 	recipients := roomPeersExcept(currentRoom, playerID)
 	h.mu.Unlock()
@@ -285,6 +302,9 @@ func (h *Hub) UsePortal(playerID string) (Player, bool) {
 	}
 	player.MapID = targetRoom.mapDef.ID
 	player = applyGround(targetRoom.mapDef, player, player.Y, time.Time{})
+	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, h.equipments)
+	player = ApplyEquipmentStats(player, h.equipments)
+	player = NormalizePlayerStatWithJobs(player, h.jobs)
 	player = applySnapshotStat(player, h.jobs)
 	player.UpdatedAt = now
 	targetRoom.players[playerID] = player
@@ -423,6 +443,39 @@ func (h *Hub) SetPrimaryStat(playerID string, stat PlayerStat) (Player, bool) {
 	player.Stat.Base.Intelligence = maxInt32(0, stat.Intelligence)
 	player.Stat.Base.Agility = maxInt32(0, stat.Agility)
 	player.Stat.Base.Luck = maxInt32(0, stat.Luck)
+	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, h.equipments)
+	player = ApplyEquipmentStats(player, h.equipments)
+	player = NormalizePlayerStatWithJobs(player, h.jobs)
+	player = applySnapshotStat(player, h.jobs)
+	player.UpdatedAt = now
+	room.players[playerID] = player
+	recipients := roomPeersExcept(room, playerID)
+	h.mu.Unlock()
+
+	event := ServerEvent{
+		Type:      "player_stat_updated",
+		Room:      roomID,
+		Player:    &player,
+		CreatedAt: now,
+	}
+	h.broadcast(recipients, event)
+	h.publish("battle.events.world.player_stat_updated", event)
+	return player, true
+}
+
+func (h *Hub) SetEquipment(playerID string, equipmentIDs []string) (Player, bool) {
+	now := time.Now().UTC()
+
+	h.mu.Lock()
+	roomID, ok := h.players[playerID]
+	if !ok {
+		h.mu.Unlock()
+		return Player{}, false
+	}
+	room := h.rooms[roomID]
+	player := room.players[playerID]
+	player.EquipmentIDs = FilterEquipmentsByRequirement(player, slices.Clone(equipmentIDs), h.equipments)
+	player = ApplyEquipmentStats(player, h.equipments)
 	player = NormalizePlayerStatWithJobs(player, h.jobs)
 	player = applySnapshotStat(player, h.jobs)
 	player.UpdatedAt = now
@@ -482,6 +535,7 @@ func (h *Hub) normalAttackAt(playerID string, now time.Time) (AttackResult, Play
 		if playerIntersectsRect(candidate, area) {
 			outcome := combat.NormalAttack(attacker.CombatStat, candidate.CombatStat)
 			candidate.Stat.Base.HP = maxInt32(0, candidate.Stat.Base.HP-outcome.Damage)
+			candidate = ApplyEquipmentStats(candidate, h.equipments)
 			candidate = NormalizePlayerStatWithJobs(candidate, h.jobs)
 			candidate = applySnapshotStat(candidate, h.jobs)
 			candidate.UpdatedAt = now
@@ -549,6 +603,7 @@ func (h *Hub) castSkillAt(playerID string, skillID string, now time.Time) (Skill
 	caster.LastSkillAt[skillID] = now
 	caster.ActionKind = actionKindSkill
 	caster.ActionLockedUntil = now.Add(combat.SkillCastInterval(skill))
+	caster = ApplyEquipmentStats(caster, h.equipments)
 	caster = NormalizePlayerStatWithJobs(caster, h.jobs)
 	caster = applySnapshotStat(caster, h.jobs)
 	caster.UpdatedAt = now
@@ -605,6 +660,7 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			previousPlayer := player
 			recovered := false
 			player = applyRecovery(player, dt)
+			player = ApplyEquipmentStats(player, h.equipments)
 			player = NormalizePlayerStatWithJobs(player, h.jobs)
 			player = applySnapshotStat(player, h.jobs)
 			room.players[playerID] = player
@@ -634,12 +690,13 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 
 			previousX := player.X
 			previousY := player.Y
-			player.VX = player.InputX * room.mapDef.MoveSpeed
+			moveSpeed := world.Clamp(room.mapDef.MoveSpeed, 0, DefaultMaxPlayerMoveSpeed)
+			player.VX = player.InputX * moveSpeed
 			player.X += player.VX * dt
 			player.VY += room.mapDef.Gravity * dt
 			player.Y += player.VY * dt
 			player.UpdatedAt = now
-			player = resolvePlayerMovementFromWithJobs(room, player, previousX, previousY, h.jobs, now).Player
+			player = resolvePlayerMovementFromWithJobs(room, player, previousX, previousY, h.jobs, h.equipments, now).Player
 			room.players[playerID] = player
 
 			recipients := roomPeers(room)
@@ -717,6 +774,7 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 				if playerIntersectsRect(candidate, projectileRect(projectile)) {
 					outcome := combat.MagicSkillAttack(projectile.CasterStat, candidate.CombatStat, projectile.Skill)
 					candidate.Stat.Base.HP = maxInt32(0, candidate.Stat.Base.HP-outcome.Damage)
+					candidate = ApplyEquipmentStats(candidate, h.equipments)
 					candidate = NormalizePlayerStatWithJobs(candidate, h.jobs)
 					candidate = applySnapshotStat(candidate, h.jobs)
 					candidate.UpdatedAt = now

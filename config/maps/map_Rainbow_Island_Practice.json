@@ -12,6 +12,7 @@
     "y": 1500
   },
   "terrain": [],
+  "polygons": [],
   "platforms": [
     {
       "id": "floating_stone_x_1",
@@ -49,6 +50,34 @@
       "height": 44,
       "solidSides": true,
       "solidCeiling": true
+    },
+    {
+      "id": "platform_6",
+      "x": 2145,
+      "y": 1390,
+      "width": 257,
+      "height": 107
+    },
+    {
+      "id": "platform_7",
+      "x": 3,
+      "y": 1195,
+      "width": 600,
+      "height": 297
+    },
+    {
+      "id": "platform_8",
+      "x": 79,
+      "y": 901,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_9",
+      "x": 494,
+      "y": 722,
+      "width": 260,
+      "height": 40
     }
   ],
   "walls": [

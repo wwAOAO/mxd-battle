@@ -4,5 +4,8 @@
     },
     "Treasure_Island": {
         "city": "maps/map_Treasure_Island_city.json"
+    },
+    "Magic_Forest": {
+        "out": "maps/map_magic_forest_out.json"
     }
 }

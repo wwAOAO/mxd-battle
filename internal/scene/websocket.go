@@ -44,12 +44,13 @@ type RoleSnapshot struct {
 }
 
 type moveMessage struct {
-	Type    string     `json:"type"`
-	X       float64    `json:"x"`
-	Y       float64    `json:"y"`
-	InputX  float64    `json:"inputX"`
-	Stat    PlayerStat `json:"stat"`
-	SkillID string     `json:"skillId"`
+	Type         string     `json:"type"`
+	X            float64    `json:"x"`
+	Y            float64    `json:"y"`
+	InputX       float64    `json:"inputX"`
+	Stat         PlayerStat `json:"stat"`
+	SkillID      string     `json:"skillId"`
+	EquipmentIDs []string   `json:"equipmentIds"`
 }
 
 type websocketClient struct {
@@ -69,6 +70,7 @@ func NewHandler(hub *Hub, logger *slog.Logger, roleProvider RoleProvider) *Handl
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.health)
 	mux.HandleFunc("/job-stats", h.jobStats)
+	mux.HandleFunc("/equipment-stats", h.equipmentStats)
 	mux.HandleFunc("/rooms", h.rooms)
 	mux.HandleFunc("/rooms/", h.roomState)
 	mux.HandleFunc("/ws", h.websocket)
@@ -85,6 +87,10 @@ func (h *Handler) rooms(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) jobStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.JobStatConfigs())
+}
+
+func (h *Handler) equipmentStats(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, h.hub.EquipmentConfigs())
 }
 
 func (h *Handler) roomState(w http.ResponseWriter, r *http.Request) {
@@ -284,6 +290,18 @@ func (c *websocketClient) readLoop(hub *Hub) {
 			}
 			if msg.Type == "attack" {
 				_, _, _ = hub.NormalAttack(c.playerID)
+				continue
+			}
+			if msg.Type == "equipment" {
+				player, ok := hub.SetEquipment(c.playerID, msg.EquipmentIDs)
+				if ok {
+					c.writeEvent(ServerEvent{
+						Type:      "player_stat_updated",
+						Room:      player.Room,
+						Player:    &player,
+						CreatedAt: time.Now().UTC(),
+					})
+				}
 				continue
 			}
 			if msg.Type == "skill" {

@@ -249,6 +249,136 @@ func TestHubSetPrimaryStatRecalculatesCombatStat(t *testing.T) {
 	}
 }
 
+func TestHubSetEquipmentAppliesEquipmentStats(t *testing.T) {
+	equipments := combat.EquipmentConfigs{
+		"bronze_sword": {
+			ID:          "bronze_sword",
+			Name:        "Bronze Sword",
+			Slot:        "weapon",
+			Stat:        combat.BaseStat{Strength: 5},
+			Requirement: combat.EquipmentRequirement{Strength: 10},
+		},
+		"swift_boots": {
+			ID:          "swift_boots",
+			Name:        "Swift Boots",
+			Slot:        "shoes",
+			Stat:        combat.BaseStat{Agility: 8},
+			Requirement: combat.EquipmentRequirement{Agility: 8},
+		},
+	}
+	hub, err := NewHubWithJobsAndEquipment(nil, nil, testRoomMaps(), combat.JobStatConfigs{
+		"warrior": {
+			Name: "Warrior",
+			Allocation: combat.CombatStatAllocation{
+				PhysicalAttackMin: combat.StatPercent{Strength: 100},
+				PhysicalAttackMax: combat.StatPercent{Strength: 100},
+				MoveSpeed:         combat.StatPercent{Agility: 10},
+			},
+		},
+	}, equipments)
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{
+		ID:      "equipped",
+		JobCode: "warrior",
+		Stat: PlayerStatBundle{
+			Base: PlayerStat{Strength: 10, Agility: 8, HP: 500, MP: 100, HPMax: 500, MPMax: 100},
+		},
+	}, &recordingPeer{}); err != nil {
+		t.Fatalf("join equipped: %v", err)
+	}
+
+	player, ok := hub.SetEquipment("equipped", []string{"bronze_sword", "swift_boots"})
+	if !ok {
+		t.Fatal("expected equipment update to succeed")
+	}
+	if player.Stat.Equipment.Strength != 5 || player.Stat.Equipment.Agility != 8 {
+		t.Fatalf("expected equipment layer to be populated, got %+v", player.Stat.Equipment)
+	}
+	if player.Stat.Final.Strength != 15 || player.Stat.Final.Agility != 16 {
+		t.Fatalf("expected final stat to include equipment bonuses, got %+v", player.Stat.Final)
+	}
+	if player.CombatStat.PhysicalAttackMin != 15 || player.CombatStat.MoveSpeed != 2 {
+		t.Fatalf("expected combat stat to reflect equipment bonuses, got %+v", player.CombatStat)
+	}
+}
+
+func TestHubSetEquipmentFiltersItemsByRequirement(t *testing.T) {
+	equipments := combat.EquipmentConfigs{
+		"bronze_sword": {
+			ID:          "bronze_sword",
+			Name:        "Bronze Sword",
+			Slot:        "weapon",
+			Stat:        combat.BaseStat{Strength: 5},
+			Requirement: combat.EquipmentRequirement{Strength: 10},
+		},
+		"swift_boots": {
+			ID:          "swift_boots",
+			Name:        "Swift Boots",
+			Slot:        "shoes",
+			Stat:        combat.BaseStat{Agility: 8},
+			Requirement: combat.EquipmentRequirement{Agility: 8},
+		},
+	}
+	hub, err := NewHubWithJobsAndEquipment(nil, nil, testRoomMaps(), combat.JobStatConfigs{
+		"warrior": {
+			Name: "Warrior",
+			Allocation: combat.CombatStatAllocation{
+				PhysicalAttackMin: combat.StatPercent{Strength: 100},
+				PhysicalAttackMax: combat.StatPercent{Strength: 100},
+				MoveSpeed:         combat.StatPercent{Agility: 10},
+			},
+		},
+	}, equipments)
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{
+		ID:      "gated",
+		JobCode: "warrior",
+		Stat: PlayerStatBundle{
+			Base: PlayerStat{Strength: 9, Agility: 7, HP: 500, MP: 100, HPMax: 500, MPMax: 100},
+		},
+	}, &recordingPeer{}); err != nil {
+		t.Fatalf("join gated: %v", err)
+	}
+
+	player, ok := hub.SetEquipment("gated", []string{"bronze_sword", "swift_boots"})
+	if !ok {
+		t.Fatal("expected equipment update to succeed")
+	}
+	if len(player.EquipmentIDs) != 0 {
+		t.Fatalf("expected gated player to equip nothing, got %+v", player.EquipmentIDs)
+	}
+	if player.Stat.Equipment != (PlayerStat{}) {
+		t.Fatalf("expected no equipment bonuses when requirements fail, got %+v", player.Stat.Equipment)
+	}
+
+	player, ok = hub.SetPrimaryStat("gated", PlayerStat{Strength: 10, Agility: 8})
+	if !ok {
+		t.Fatal("expected primary stat update to succeed")
+	}
+	player, ok = hub.SetEquipment("gated", []string{"bronze_sword", "swift_boots"})
+	if !ok {
+		t.Fatal("expected gated equipment update to succeed after stat increase")
+	}
+	if len(player.EquipmentIDs) != 2 {
+		t.Fatalf("expected both equipments to be worn after meeting requirements, got %+v", player.EquipmentIDs)
+	}
+
+	player, ok = hub.SetPrimaryStat("gated", PlayerStat{Strength: 9, Agility: 8})
+	if !ok {
+		t.Fatal("expected stat decrease to succeed")
+	}
+	if len(player.EquipmentIDs) != 1 || player.EquipmentIDs[0] != "swift_boots" {
+		t.Fatalf("expected weapon to be auto-removed after stat decrease, got %+v", player.EquipmentIDs)
+	}
+	if player.Stat.Equipment.Strength != 0 || player.Stat.Equipment.Agility != 8 {
+		t.Fatalf("expected only valid equipment bonuses to remain, got %+v", player.Stat.Equipment)
+	}
+}
+
 func TestHubSetPrimaryStatRecalculatesMaxHPAndMP(t *testing.T) {
 	hub, err := NewHubWithJobs(nil, nil, testRoomMaps(), combat.JobStatConfigs{
 		"beginner": {
@@ -1161,6 +1291,48 @@ func TestHubBlocksHeadMovementThroughWallCeiling(t *testing.T) {
 	expectedY := 1000 + 120 + DefaultPlayerHeight + wallSkin
 	if player.Y != expectedY || player.VY != 0 {
 		t.Fatalf("expected wall ceiling to block upward movement at y=%v, got %+v", expectedY, player)
+	}
+}
+
+func TestHubClampsMoveSpeedToMaxLimit(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_move_speed_clamp",
+			Width:        3200,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    9999,
+			Spawn:        world.Point{X: 180, Y: 1500},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "speed-clamped"}, &recordingPeer{}); err != nil {
+		t.Fatalf("join speed-clamped: %v", err)
+	}
+
+	initialState, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("initial state: %v", err)
+	}
+	initialX := initialState.Players["speed-clamped"].X
+
+	if _, ok := hub.SetInput("speed-clamped", 1); !ok {
+		t.Fatal("expected input to be accepted")
+	}
+	hub.StepPhysics(testTime(), 0.1)
+
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	player := state.Players["speed-clamped"]
+	expectedX := initialX + DefaultMaxPlayerMoveSpeed*0.1
+	if player.X != expectedX {
+		t.Fatalf("expected clamped move speed to move player to %v, got %+v", expectedX, player)
 	}
 }
 

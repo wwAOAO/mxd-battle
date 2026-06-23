@@ -190,7 +190,7 @@
     },
     {
       "id": "portal_2",
-      "targetRoomId": "Treasure_Island.city",
+      "targetRoomId": "Magic_Forest.out",
       "area": {
         "x": 2336,
         "y": 934,
@@ -198,8 +198,8 @@
         "height": 144
       },
       "target": {
-        "x": 120,
-        "y": 1500
+        "x": 42,
+        "y": 1410
       }
     }
   ]

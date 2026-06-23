@@ -112,12 +112,35 @@
 
       .stat-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
+        min-width: 0;
       }
 
-      .stat-grid input {
+      .stat-grid label {
+        min-width: 0;
+      }
+
+      .stat-grid input,
+      .stat-grid select {
         width: 100%;
+        min-width: 0;
+      }
+
+      .equipment-label {
+        align-content: start;
+      }
+
+      .equipment-requirement {
+        color: #5f6c80;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .equipment-requirement.unmet {
+        color: #c2410c;
       }
 
       .status {
@@ -257,6 +280,11 @@
           </div>
         </section>
 
+        <section class="panel" id="equipment-panel">
+          <p class="panel-title">Equipment</p>
+          <div id="equipment-controls" class="stat-grid"></div>
+        </section>
+
         <pre id="log"></pre>
       </aside>
 
@@ -288,6 +316,7 @@
       let lastInputX = 0;
       let lastFrameAt = performance.now();
       let jobStatConfigs = {};
+      let equipmentConfigs = {};
       const statInputIds = {
         strength: "stat-strength",
         intelligence: "stat-intelligence",
@@ -366,6 +395,20 @@
           }
         } catch (error) {
           log("failed to load rooms", { message: error.message });
+        }
+      }
+
+      async function loadEquipmentStats() {
+        try {
+          const response = await fetch("/equipment-stats");
+          if (!response.ok) return;
+          equipmentConfigs = await response.json();
+          renderEquipmentPanel();
+          log("equipment stats loaded", {
+            count: Object.keys(equipmentConfigs).length,
+          });
+        } catch (error) {
+          log("failed to load equipment stats", { message: error.message });
         }
       }
 
@@ -455,6 +498,13 @@
           world.platforms = event.state.map.platforms || [];
           world.walls = event.state.map.walls || [];
           world.portals = event.state.map.portals || [];
+          log("map geometry", {
+            room: event.state.id,
+            terrain: world.terrain.length,
+            polygons: world.polygons.length,
+            platforms: world.platforms.length,
+            walls: world.walls.length,
+          });
           $("room").value = event.state.id;
           players.clear();
           projectiles.clear();
@@ -465,6 +515,7 @@
             projectiles.set(projectile.id, withDisplayProjectile(projectile));
           });
           syncPrimaryStatForm();
+          renderEquipmentPanel();
         }
         if (event.player) {
           const previous = players.get(event.player.id);
@@ -475,6 +526,7 @@
           });
           if (event.player.id === $("player").value.trim()) {
             syncPrimaryStatForm();
+            renderEquipmentPanel();
           }
         }
         if (event.type === "player_attacked" && event.attack) {
@@ -562,6 +614,123 @@
       function readStatInput(key) {
         const value = Number($(statInputIds[key]).value);
         return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+      }
+
+      function groupEquipmentsBySlot() {
+        const groups = new Map();
+        for (const [id, config] of Object.entries(equipmentConfigs)) {
+          const slot = config.slot || "misc";
+          const items = groups.get(slot) || [];
+          items.push({ id, ...config });
+          groups.set(slot, items);
+        }
+        return Array.from(groups.entries()).sort((a, b) =>
+          a[0].localeCompare(b[0]),
+        );
+      }
+
+      function getEquipmentRequirementText(requirement) {
+        if (!requirement) return "";
+        const entries = [
+          ["STR", requirement.strength],
+          ["INT", requirement.intelligence],
+          ["AGI", requirement.agility],
+          ["LUK", requirement.luck],
+        ].filter(([, value]) => Number(value) > 0);
+        return entries.map(([label, value]) => label + " " + value).join("  ");
+      }
+
+      function getRequirementStatSource(player) {
+        if (!player || !player.stat) {
+          return readPrimaryStatForm();
+        }
+        return addStats(player.stat.base, player.stat.bonus, player.stat.extra);
+      }
+
+      function canWearEquipment(player, config) {
+        if (!config) return false;
+        const stat = getRequirementStatSource(player);
+        const requirement = config.requirement || {};
+        return (
+          (Number(stat.strength) || 0) >= (Number(requirement.strength) || 0) &&
+          (Number(stat.intelligence) || 0) >=
+            (Number(requirement.intelligence) || 0) &&
+          (Number(stat.agility) || 0) >= (Number(requirement.agility) || 0) &&
+          (Number(stat.luck) || 0) >= (Number(requirement.luck) || 0)
+        );
+      }
+
+      function sendEquipment() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        const controls = document.querySelectorAll("[data-equipment-slot]");
+        const equipmentIds = [];
+        for (const control of controls) {
+          if (control.value) equipmentIds.push(control.value);
+        }
+        socket.send(JSON.stringify({ type: "equipment", equipmentIds }));
+        log("equipment sent", { equipmentIds });
+      }
+
+      function renderEquipmentPanel() {
+        const root = $("equipment-controls");
+        if (!root) return;
+        root.textContent = "";
+        const self = players.get($("player").value.trim());
+        const equipped = new Set((self && self.equipmentIds) || []);
+        const groups = groupEquipmentsBySlot();
+        if (groups.length === 0) {
+          const empty = document.createElement("div");
+          empty.textContent = "No equipment config";
+          root.appendChild(empty);
+          return;
+        }
+
+        for (const [slot, items] of groups) {
+          const label = document.createElement("label");
+          label.textContent = slot;
+          label.className = "equipment-label";
+          const select = document.createElement("select");
+          select.dataset.equipmentSlot = slot;
+          const emptyOption = document.createElement("option");
+          emptyOption.value = "";
+          emptyOption.textContent = "None";
+          select.appendChild(emptyOption);
+
+          for (const item of items) {
+            const option = document.createElement("option");
+            const requirementText = getEquipmentRequirementText(
+              item.requirement,
+            );
+            const wearable = canWearEquipment(self, item);
+            option.value = item.id;
+            option.textContent = requirementText
+              ? (item.name || item.id) + " (" + requirementText + ")"
+              : item.name || item.id;
+            option.disabled = !wearable && !equipped.has(item.id);
+            if (equipped.has(item.id)) option.selected = true;
+            select.appendChild(option);
+          }
+          select.addEventListener("change", sendEquipment);
+          label.appendChild(select);
+
+          const hint = document.createElement("div");
+          hint.className = "equipment-requirement";
+          const selectedConfig = equipmentConfigs[select.value];
+          if (selectedConfig) {
+            const requirementText = getEquipmentRequirementText(
+              selectedConfig.requirement,
+            );
+            if (requirementText) {
+              hint.textContent = "Require: " + requirementText;
+              hint.classList.toggle(
+                "unmet",
+                !canWearEquipment(self, selectedConfig),
+              );
+            }
+          }
+          label.appendChild(hint);
+          root.appendChild(label);
+        }
       }
 
       function sendPrimaryStat() {
@@ -955,6 +1124,7 @@
         const points = Array.isArray(polygon.points) ? polygon.points : [];
         if (points.length < 3) return;
 
+        const lineWidth = Math.max(2, 4 * scale);
         ctx.beginPath();
         ctx.moveTo(
           offsetX + points[0].x * scale,
@@ -967,11 +1137,24 @@
           );
         }
         ctx.closePath();
-        ctx.fillStyle = "rgba(93, 101, 114, 0.38)";
+        ctx.fillStyle = "rgba(34, 197, 94, 0.24)";
         ctx.fill();
-        ctx.strokeStyle = "#303642";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#15803d";
+        ctx.lineWidth = lineWidth;
         ctx.stroke();
+
+        ctx.fillStyle = "#166534";
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.arc(
+            offsetX + point.x * scale,
+            offsetY + point.y * scale,
+            Math.max(3, 5 * scale),
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+        }
       }
       function terrainPoints(terrain) {
         if (Array.isArray(terrain.points) && terrain.points.length > 0) {
@@ -1179,6 +1362,7 @@
       }
       loadRooms();
       loadJobStats();
+      loadEquipmentStats();
 
       window.addEventListener("keydown", (event) => {
         if (

@@ -27,8 +27,10 @@ func placePlayerInRoom(player Player, room *room, now time.Time) Player {
 	return player
 }
 
-func preparePlayerForRoom(player Player, room *room, jobs combat.JobStatConfigs, now time.Time) Player {
+func preparePlayerForRoom(player Player, room *room, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs, now time.Time) Player {
 	player = placePlayerInRoom(player, room, now)
+	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, equipmentConfigs)
+	player = ApplyEquipmentStats(player, equipmentConfigs)
 	player = NormalizePlayerStatWithJobs(player, jobs)
 	player = applySnapshotStat(player, jobs)
 	return player
@@ -40,15 +42,15 @@ func resolvePlayerMovement(room *room, player Player) movementResult {
 }
 
 func resolvePlayerMovementFrom(room *room, player Player, previousX float64, previousY float64, now time.Time) movementResult {
-	return resolvePlayerMovementFromWithJobs(room, player, previousX, previousY, nil, now)
+	return resolvePlayerMovementFromWithJobs(room, player, previousX, previousY, nil, nil, now)
 }
 
-func resolvePlayerMovementFromWithJobs(room *room, player Player, previousX float64, previousY float64, jobs combat.JobStatConfigs, now time.Time) movementResult {
+func resolvePlayerMovementFromWithJobs(room *room, player Player, previousX float64, previousY float64, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs, now time.Time) movementResult {
 	player = NormalizePlayerBody(player)
-	player = normalizePlayerStatForJobs(player, jobs)
+	player = normalizePlayerStatForJobs(player, jobs, equipmentConfigs)
 	previous := room.players[player.ID]
 	previous = NormalizePlayerBody(previous)
-	previous = normalizePlayerStatForJobs(previous, jobs)
+	previous = normalizePlayerStatForJobs(previous, jobs, equipmentConfigs)
 	previous.X = previousX
 	previous.Y = previousY
 	player.X = world.Clamp(player.X, PlayerHalfWidth(player), room.mapDef.Width-PlayerHalfWidth(player))
@@ -67,7 +69,9 @@ func resolvePlayerMovementFromWithJobs(room *room, player Player, previousX floa
 	}
 }
 
-func normalizePlayerStatForJobs(player Player, jobs combat.JobStatConfigs) Player {
+func normalizePlayerStatForJobs(player Player, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs) Player {
+	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, equipmentConfigs)
+	player = ApplyEquipmentStats(player, equipmentConfigs)
 	if jobs == nil {
 		return NormalizePlayerStat(player)
 	}

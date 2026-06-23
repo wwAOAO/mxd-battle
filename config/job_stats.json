@@ -22,7 +22,7 @@
       "magicAttackMax": { "intelligence": 130 },
       "physicalDefense": { "strength": 50, "agility": 20 },
       "magicDefense": { "intelligence": 50, "luck": 20 },
-      "moveSpeed": { "agility": 10 },
+      "moveSpeed": { "agility": 1 },
       "evasion": { "agility": 80, "luck": 20 },
       "accuracy": { "agility": 60, "luck": 40 },
       "critRate": { "luck": 30 },

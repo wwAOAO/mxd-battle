@@ -116,7 +116,7 @@ func CalculateSnapshotStat(stat BaseStat, jobCode string, configs JobStatConfigs
 		MagicAttackMax:    calculateAllocatedStat(stat, allocation.MagicAttackMax),
 		PhysicalDefense:   calculateAllocatedStat(stat, allocation.PhysicalDefense),
 		MagicDefense:      calculateAllocatedStat(stat, allocation.MagicDefense),
-		MoveSpeed:         calculateAllocatedStat(stat, allocation.MoveSpeed),
+		MoveSpeed:         clampInt32(calculateAllocatedStat(stat, allocation.MoveSpeed), 0, 600),
 		Evasion:           calculateAllocatedStat(stat, allocation.Evasion),
 		Accuracy:          calculateAllocatedStat(stat, allocation.Accuracy),
 		CritRate:          calculateAllocatedStat(stat, allocation.CritRate),

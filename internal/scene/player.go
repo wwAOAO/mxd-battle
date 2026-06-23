@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	DefaultPlayerWidth  = 52
-	DefaultPlayerHeight = 96
+	DefaultPlayerWidth        = 52
+	DefaultPlayerHeight       = 96
+	DefaultMaxPlayerMoveSpeed = 600
 )
 
 type Player struct {
@@ -19,6 +20,7 @@ type Player struct {
 	JobCode           string               `json:"jobCode"`
 	Stat              PlayerStatBundle     `json:"stat"`
 	CombatStat        combat.SnapshotStat  `json:"combatStat"`
+	EquipmentIDs      []string             `json:"equipmentIds,omitempty"`
 	X                 float64              `json:"x"`
 	Y                 float64              `json:"y"`
 	Width             float64              `json:"width"`
@@ -66,6 +68,49 @@ func DefaultPlayerStatBundle() PlayerStatBundle {
 		Base:  base,
 		Final: base,
 	}
+}
+
+func ApplyEquipmentStats(player Player, equipmentConfigs combat.EquipmentConfigs) Player {
+	if len(equipmentConfigs) == 0 {
+		player.Stat.Equipment = PlayerStat{}
+		return player
+	}
+	player.Stat.Equipment = combat.AggregateEquipmentStat(player.EquipmentIDs, equipmentConfigs)
+	return player
+}
+
+func EffectiveEquipmentRequirementStat(player Player) combat.BaseStat {
+	return addStatLayers(player.Stat.Base, player.Stat.Bonus, player.Stat.Extra)
+}
+
+func FilterEquipmentsByRequirement(player Player, equipmentIDs []string, equipmentConfigs combat.EquipmentConfigs) []string {
+	if len(equipmentIDs) == 0 || len(equipmentConfigs) == 0 {
+		return nil
+	}
+
+	stat := EffectiveEquipmentRequirementStat(player)
+	filtered := make([]string, 0, len(equipmentIDs))
+	usedSlots := make(map[string]int)
+	for _, equipmentID := range equipmentIDs {
+		config, ok := equipmentConfigs[equipmentID]
+		if !ok {
+			continue
+		}
+		if !combat.MeetsEquipmentRequirement(stat, config) {
+			continue
+		}
+		slot := config.Slot
+		if slot == "" {
+			slot = "misc"
+		}
+		if index, ok := usedSlots[slot]; ok {
+			filtered[index] = equipmentID
+			continue
+		}
+		usedSlots[slot] = len(filtered)
+		filtered = append(filtered, equipmentID)
+	}
+	return filtered
 }
 
 func NormalizePlayerBody(player Player) Player {

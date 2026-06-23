@@ -1,0 +1,61 @@
+{
+  "bronze_sword": {
+    "id": "bronze_sword",
+    "name": "Bronze Sword",
+    "slot": "weapon",
+    "stat": {
+      "strength": 5,
+      "hpMax": 40
+    },
+    "requirement": {
+      "strength": 10
+    }
+  },
+  "apprentice_staff": {
+    "id": "apprentice_staff",
+    "name": "Apprentice Staff",
+    "slot": "weapon",
+    "stat": {
+      "intelligence": 6,
+      "mpMax": 35
+    },
+    "requirement": {
+      "intelligence": 12
+    }
+  },
+  "swift_boots": {
+    "id": "swift_boots",
+    "name": "Swift Boots",
+    "slot": "shoes",
+    "stat": {
+      "agility": 8
+    },
+    "requirement": {
+      "agility": 8
+    }
+  },
+  "lucky_charm": {
+    "id": "lucky_charm",
+    "name": "Lucky Charm",
+    "slot": "accessory",
+    "stat": {
+      "luck": 6
+    },
+    "requirement": {
+      "luck": 6
+    }
+  },
+  "traveler_cloak": {
+    "id": "traveler_cloak",
+    "name": "Traveler Cloak",
+    "slot": "armor",
+    "stat": {
+      "hpMax": 80,
+      "mpMax": 20
+    },
+    "requirement": {
+      "strength": 5,
+      "agility": 4
+    }
+  }
+}
