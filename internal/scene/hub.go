@@ -39,17 +39,18 @@ type RoomState struct {
 }
 
 type ServerEvent struct {
-	Type         string        `json:"type"`
-	Room         string        `json:"room,omitempty"`
-	Player       *Player       `json:"player,omitempty"`
-	PlayerID     string        `json:"playerId,omitempty"`
-	Attack       *AttackResult `json:"attack,omitempty"`
-	Skill        *SkillResult  `json:"skill,omitempty"`
-	Projectile   *Projectile   `json:"projectile,omitempty"`
-	ProjectileID string        `json:"projectileId,omitempty"`
-	State        *RoomState    `json:"state,omitempty"`
-	Message      string        `json:"message,omitempty"`
-	CreatedAt    time.Time     `json:"createdAt"`
+	Type         string                    `json:"type"`
+	Room         string                    `json:"room,omitempty"`
+	Player       *Player                   `json:"player,omitempty"`
+	PlayerID     string                    `json:"playerId,omitempty"`
+	Attack       *AttackResult             `json:"attack,omitempty"`
+	Skill        *SkillResult              `json:"skill,omitempty"`
+	Projectile   *Projectile               `json:"projectile,omitempty"`
+	ProjectileID string                    `json:"projectileId,omitempty"`
+	State        *RoomState                `json:"state,omitempty"`
+	Message      string                    `json:"message,omitempty"`
+	EquipResult  *EquipmentSelectionResult `json:"equipResult,omitempty"`
+	CreatedAt    time.Time                 `json:"createdAt"`
 }
 
 type AttackResult struct {
@@ -67,6 +68,10 @@ type SkillResult struct {
 	Area         world.Rect           `json:"area"`
 	MPCost       int32                `json:"mpCost"`
 	CooldownMS   int32                `json:"cooldownMs"`
+	StartupMS    int32                `json:"startupMs"`
+	ActiveMS     int32                `json:"activeMs"`
+	RecoveryMS   int32                `json:"recoveryMs"`
+	IntervalMS   int32                `json:"intervalMs"`
 	Outcome      combat.AttackOutcome `json:"outcome"`
 }
 
@@ -114,7 +119,7 @@ func NewHubWithJobsAndEquipment(logger *slog.Logger, publisher EventPublisher, m
 		players:    make(map[string]string),
 		jobs:       jobs,
 		skills:     skills,
-		equipments: equipmentConfigs,
+		equipments: combat.NormalizeEquipmentConfigs(equipmentConfigs),
 	}, nil
 }
 
@@ -161,7 +166,7 @@ func (h *Hub) DefaultRoom() string {
 }
 
 func (h *Hub) StartPhysics(ctx context.Context) {
-	//每 50ms 一次，约等于 20 tick/s。
+	// Physics runs at 20 ticks per second.
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -302,10 +307,10 @@ func (h *Hub) UsePortal(playerID string) (Player, bool) {
 	}
 	player.MapID = targetRoom.mapDef.ID
 	player = applyGround(targetRoom.mapDef, player, player.Y, time.Time{})
-	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, h.equipments)
+	player, _ = NormalizeEquipmentSelection(player, h.equipments)
 	player = ApplyEquipmentStats(player, h.equipments)
 	player = NormalizePlayerStatWithJobs(player, h.jobs)
-	player = applySnapshotStat(player, h.jobs)
+	player = applySnapshotStat(player, h.jobs, h.equipments)
 	player.UpdatedAt = now
 	targetRoom.players[playerID] = player
 	targetRoom.peers[playerID] = peer
@@ -353,6 +358,9 @@ func (h *Hub) Jump(playerID string) (Player, bool) {
 	}
 	room := h.rooms[roomID]
 	player := room.players[playerID]
+	if player.OnLadder {
+		player = detachLadder(player)
+	}
 	if player.OnGround {
 		player.VY = room.mapDef.JumpVelocity
 		player.OnGround = false
@@ -406,7 +414,7 @@ func (h *Hub) Drop(playerID string) (Player, bool) {
 	return player, true
 }
 
-func (h *Hub) SetInput(playerID string, inputX float64) (Player, bool) {
+func (h *Hub) SetInput(playerID string, inputX float64, inputY float64) (Player, bool) {
 	now := time.Now().UTC()
 
 	h.mu.Lock()
@@ -418,8 +426,18 @@ func (h *Hub) SetInput(playerID string, inputX float64) (Player, bool) {
 	room := h.rooms[roomID]
 	player := room.players[playerID]
 	player.InputX = world.Clamp(inputX, -1, 1)
+	player.InputY = world.Clamp(inputY, -1, 1)
 	if player.InputX != 0 {
 		player.FacingX = player.InputX
+	}
+	if player.InputY != 0 {
+		player = tryAttachLadder(room.mapDef, player)
+	} else if player.OnLadder {
+		if player.InputX != 0 {
+			player = detachLadder(player)
+		} else if _, ok := ladderByID(room.mapDef, player.LadderID); !ok {
+			player = detachLadder(player)
+		}
 	}
 	player.UpdatedAt = now
 	room.players[playerID] = player
@@ -443,10 +461,10 @@ func (h *Hub) SetPrimaryStat(playerID string, stat PlayerStat) (Player, bool) {
 	player.Stat.Base.Intelligence = maxInt32(0, stat.Intelligence)
 	player.Stat.Base.Agility = maxInt32(0, stat.Agility)
 	player.Stat.Base.Luck = maxInt32(0, stat.Luck)
-	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, h.equipments)
+	player, _ = NormalizeEquipmentSelection(player, h.equipments)
 	player = ApplyEquipmentStats(player, h.equipments)
 	player = NormalizePlayerStatWithJobs(player, h.jobs)
-	player = applySnapshotStat(player, h.jobs)
+	player = applySnapshotStat(player, h.jobs, h.equipments)
 	player.UpdatedAt = now
 	room.players[playerID] = player
 	recipients := roomPeersExcept(room, playerID)
@@ -463,35 +481,37 @@ func (h *Hub) SetPrimaryStat(playerID string, stat PlayerStat) (Player, bool) {
 	return player, true
 }
 
-func (h *Hub) SetEquipment(playerID string, equipmentIDs []string) (Player, bool) {
+func (h *Hub) SetEquipment(playerID string, equipmentIDs []string) (Player, EquipmentSelectionResult, bool) {
 	now := time.Now().UTC()
 
 	h.mu.Lock()
 	roomID, ok := h.players[playerID]
 	if !ok {
 		h.mu.Unlock()
-		return Player{}, false
+		return Player{}, EquipmentSelectionResult{}, false
 	}
 	room := h.rooms[roomID]
 	player := room.players[playerID]
-	player.EquipmentIDs = FilterEquipmentsByRequirement(player, slices.Clone(equipmentIDs), h.equipments)
+	selection := EvaluateEquipmentSelection(player, slices.Clone(equipmentIDs), h.equipments)
+	player.EquipmentIDs = selection.EquipmentIDs
 	player = ApplyEquipmentStats(player, h.equipments)
 	player = NormalizePlayerStatWithJobs(player, h.jobs)
-	player = applySnapshotStat(player, h.jobs)
+	player = applySnapshotStat(player, h.jobs, h.equipments)
 	player.UpdatedAt = now
 	room.players[playerID] = player
 	recipients := roomPeersExcept(room, playerID)
 	h.mu.Unlock()
 
 	event := ServerEvent{
-		Type:      "player_stat_updated",
-		Room:      roomID,
-		Player:    &player,
-		CreatedAt: now,
+		Type:        "player_stat_updated",
+		Room:        roomID,
+		Player:      &player,
+		EquipResult: &selection,
+		CreatedAt:   now,
 	}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_stat_updated", event)
-	return player, true
+	return player, selection, true
 }
 
 func (h *Hub) NormalAttack(playerID string) (AttackResult, Player, bool) {
@@ -537,7 +557,7 @@ func (h *Hub) normalAttackAt(playerID string, now time.Time) (AttackResult, Play
 			candidate.Stat.Base.HP = maxInt32(0, candidate.Stat.Base.HP-outcome.Damage)
 			candidate = ApplyEquipmentStats(candidate, h.equipments)
 			candidate = NormalizePlayerStatWithJobs(candidate, h.jobs)
-			candidate = applySnapshotStat(candidate, h.jobs)
+			candidate = applySnapshotStat(candidate, h.jobs, h.equipments)
 			candidate.UpdatedAt = now
 			room.players[targetID] = candidate
 			target = candidate
@@ -602,10 +622,11 @@ func (h *Hub) castSkillAt(playerID string, skillID string, now time.Time) (Skill
 	}
 	caster.LastSkillAt[skillID] = now
 	caster.ActionKind = actionKindSkill
-	caster.ActionLockedUntil = now.Add(combat.SkillCastInterval(skill))
 	caster = ApplyEquipmentStats(caster, h.equipments)
 	caster = NormalizePlayerStatWithJobs(caster, h.jobs)
-	caster = applySnapshotStat(caster, h.jobs)
+	caster = applySnapshotStat(caster, h.jobs, h.equipments)
+	timing := combat.CalculateSkillTiming(skill, caster.CombatStat)
+	caster.ActionLockedUntil = now.Add(combat.SkillCastInterval(skill, caster.CombatStat))
 	caster.UpdatedAt = now
 	room.players[playerID] = caster
 
@@ -614,7 +635,8 @@ func (h *Hub) castSkillAt(playerID string, skillID string, now time.Time) (Skill
 		CasterID:  playerID,
 		SkillID:   skillID,
 		Skill:     skill,
-		ReadyAt:   now.Add(combat.SkillStartup(skill)),
+		Timing:    timing,
+		ReadyAt:   now.Add(combat.SkillStartup(skill, caster.CombatStat)),
 		CreatedAt: now,
 	}
 	room.pendingSkills[pending.ID] = pending
@@ -624,6 +646,10 @@ func (h *Hub) castSkillAt(playerID string, skillID string, now time.Time) (Skill
 		CasterID:   playerID,
 		MPCost:     skill.MPCost,
 		CooldownMS: skill.CooldownMS,
+		StartupMS:  timing.StartupMS,
+		ActiveMS:   timing.ActiveMS,
+		RecoveryMS: timing.RecoveryMS,
+		IntervalMS: timing.IntervalMS,
 	}
 
 	recipients := roomPeers(room)
@@ -662,7 +688,7 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			player = applyRecovery(player, dt)
 			player = ApplyEquipmentStats(player, h.equipments)
 			player = NormalizePlayerStatWithJobs(player, h.jobs)
-			player = applySnapshotStat(player, h.jobs)
+			player = applySnapshotStat(player, h.jobs, h.equipments)
 			room.players[playerID] = player
 			if player.Stat.Final.HP != previousPlayer.Stat.Final.HP ||
 				player.Stat.Final.MP != previousPlayer.Stat.Final.MP {
@@ -671,7 +697,7 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 				room.players[playerID] = player
 			}
 
-			if player.OnGround && player.VY == 0 && player.InputX == 0 {
+			if player.OnGround && !player.OnLadder && player.VY == 0 && player.InputX == 0 && player.InputY == 0 {
 				if recovered {
 					recipients := roomPeers(room)
 					playerCopy := player
@@ -693,8 +719,32 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			moveSpeed := world.Clamp(room.mapDef.MoveSpeed, 0, DefaultMaxPlayerMoveSpeed)
 			player.VX = player.InputX * moveSpeed
 			player.X += player.VX * dt
-			player.VY += room.mapDef.Gravity * dt
-			player.Y += player.VY * dt
+			if player.OnLadder && player.InputY == 0 && player.InputX != 0 {
+				player = detachLadder(player)
+			}
+			if player.OnLadder {
+				ladder, ok := ladderByID(room.mapDef, player.LadderID)
+				if !ok {
+					player = detachLadder(player)
+				}
+				if player.OnLadder {
+					player.VX = 0
+					player.VY = player.InputY * ladderClimbSpeed(ladder)
+					player.Y += player.VY * dt
+					player.X = world.Clamp(player.X, ladder.X, ladder.X+ladder.Width)
+					if player.Y < ladder.Y {
+						player.Y = ladder.Y
+					}
+					ladderBottom := ladder.Y + ladder.Height
+					if player.Y > ladderBottom {
+						player.Y = ladderBottom
+					}
+				}
+			}
+			if !player.OnLadder {
+				player.VY += room.mapDef.Gravity * dt
+				player.Y += player.VY * dt
+			}
 			player.UpdatedAt = now
 			player = resolvePlayerMovementFromWithJobs(room, player, previousX, previousY, h.jobs, h.equipments, now).Player
 			room.players[playerID] = player
@@ -731,6 +781,10 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 				Area:         area,
 				MPCost:       pending.Skill.MPCost,
 				CooldownMS:   pending.Skill.CooldownMS,
+				StartupMS:    pending.Timing.StartupMS,
+				ActiveMS:     pending.Timing.ActiveMS,
+				RecoveryMS:   pending.Timing.RecoveryMS,
+				IntervalMS:   pending.Timing.IntervalMS,
 			}
 			recipients := roomPeers(room)
 			projectileCopy := projectile
@@ -776,7 +830,7 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 					candidate.Stat.Base.HP = maxInt32(0, candidate.Stat.Base.HP-outcome.Damage)
 					candidate = ApplyEquipmentStats(candidate, h.equipments)
 					candidate = NormalizePlayerStatWithJobs(candidate, h.jobs)
-					candidate = applySnapshotStat(candidate, h.jobs)
+					candidate = applySnapshotStat(candidate, h.jobs, h.equipments)
 					candidate.UpdatedAt = now
 					room.players[targetID] = candidate
 					hitTarget = candidate

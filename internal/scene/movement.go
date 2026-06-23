@@ -32,7 +32,7 @@ func preparePlayerForRoom(player Player, room *room, jobs combat.JobStatConfigs,
 	player.EquipmentIDs = FilterEquipmentsByRequirement(player, player.EquipmentIDs, equipmentConfigs)
 	player = ApplyEquipmentStats(player, equipmentConfigs)
 	player = NormalizePlayerStatWithJobs(player, jobs)
-	player = applySnapshotStat(player, jobs)
+	player = applySnapshotStat(player, jobs, equipmentConfigs)
 	return player
 }
 
@@ -56,12 +56,17 @@ func resolvePlayerMovementFromWithJobs(room *room, player Player, previousX floa
 	player.X = world.Clamp(player.X, PlayerHalfWidth(player), room.mapDef.Width-PlayerHalfWidth(player))
 	player.X = resolveWallCollision(room.mapDef, previous, player)
 	player.Y = world.Clamp(player.Y, 0, room.mapDef.GroundY)
-	player = resolveCeilingCollision(room.mapDef, previous, player)
-	player = applyGround(room.mapDef, player, previousY, now)
+	player = syncLadderState(room.mapDef, player)
+	if !player.OnLadder {
+		player = resolveCeilingCollision(room.mapDef, previous, player)
+		player = applyGround(room.mapDef, player, previousY, now)
+	} else {
+		player.OnGround = false
+	}
 	player.Room = room.id
 	player.MapID = room.mapDef.ID
 	if jobs != nil {
-		player = applySnapshotStat(player, jobs)
+		player = applySnapshotStat(player, jobs, equipmentConfigs)
 	}
 
 	return movementResult{
@@ -78,7 +83,8 @@ func normalizePlayerStatForJobs(player Player, jobs combat.JobStatConfigs, equip
 	return NormalizePlayerStatWithJobs(player, jobs)
 }
 
-func applySnapshotStat(player Player, jobs combat.JobStatConfigs) Player {
+func applySnapshotStat(player Player, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs) Player {
 	player.JobCode, player.CombatStat = combat.CalculateSnapshotStat(player.Stat.Final, player.JobCode, jobs)
+	player.CombatStat = combat.ApplyEquipmentCombatStat(player.CombatStat, combat.AggregateEquipmentCombatStat(player.EquipmentIDs, equipmentConfigs))
 	return player
 }

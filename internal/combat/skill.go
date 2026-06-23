@@ -36,6 +36,13 @@ type SkillDamageConfig struct {
 	MagicRate float64 `json:"magicRate"`
 }
 
+type SkillTiming struct {
+	StartupMS  int32 `json:"startupMs"`
+	ActiveMS   int32 `json:"activeMs"`
+	RecoveryMS int32 `json:"recoveryMs"`
+	IntervalMS int32 `json:"intervalMs"`
+}
+
 func LoadSkillConfigs(path string) (SkillConfigs, error) {
 	payload, err := os.ReadFile(path)
 	if err != nil {
@@ -99,20 +106,56 @@ func SkillCooldown(skill SkillConfig) time.Duration {
 	return time.Duration(skill.CooldownMS) * time.Millisecond
 }
 
-func SkillStartup(skill SkillConfig) time.Duration {
-	if skill.StartupMS <= 0 {
-		return 0
+func CalculateSkillTiming(skill SkillConfig, stat SnapshotStat) SkillTiming {
+	startupMS := maxInt32(0, skill.StartupMS)
+	activeMS := maxInt32(0, skill.ActiveMS)
+	recoveryMS := maxInt32(0, skill.RecoveryMS)
+	baseTotal := startupMS + activeMS + recoveryMS
+	if baseTotal <= 0 {
+		intervalMS := int32(SkillCooldown(skill) / time.Millisecond)
+		intervalMS = maxInt32(0, intervalMS-stat.CastSpeed)
+		return SkillTiming{
+			RecoveryMS: intervalMS,
+			IntervalMS: intervalMS,
+		}
 	}
-	return time.Duration(skill.StartupMS) * time.Millisecond
+
+	intervalMS := maxInt32(0, baseTotal-stat.CastSpeed)
+	if intervalMS == 0 {
+		return SkillTiming{}
+	}
+
+	scaledStartup := int32(float64(intervalMS)*float64(startupMS)/float64(baseTotal) + 0.5)
+	scaledActive := int32(float64(intervalMS)*float64(activeMS)/float64(baseTotal) + 0.5)
+	scaledRecovery := intervalMS - scaledStartup - scaledActive
+	if scaledRecovery < 0 {
+		scaledRecovery = 0
+	}
+
+	return SkillTiming{
+		StartupMS:  scaledStartup,
+		ActiveMS:   scaledActive,
+		RecoveryMS: scaledRecovery,
+		IntervalMS: intervalMS,
+	}
 }
 
-func SkillCastInterval(skill SkillConfig) time.Duration {
-	totalMS := skill.StartupMS + skill.ActiveMS + skill.RecoveryMS
-	if totalMS <= 0 {
-		return SkillCooldown(skill)
+func SkillStartup(skill SkillConfig, stat SnapshotStat) time.Duration {
+	timing := CalculateSkillTiming(skill, stat)
+	if timing.StartupMS <= 0 {
+		return 0
 	}
-	return time.Duration(totalMS) * time.Millisecond
+	return time.Duration(timing.StartupMS) * time.Millisecond
 }
+
+func SkillCastInterval(skill SkillConfig, stat SnapshotStat) time.Duration {
+	timing := CalculateSkillTiming(skill, stat)
+	if timing.IntervalMS <= 0 {
+		return 0
+	}
+	return time.Duration(timing.IntervalMS) * time.Millisecond
+}
+
 func MagicSkillAttack(caster SnapshotStat, target SnapshotStat, skill SkillConfig) AttackOutcome {
 	attack := float64(caster.MagicAttackMin+caster.MagicAttackMax) / 2
 	damage := int32(attack*skill.Damage.MagicRate) + skill.Damage.Base - target.MagicDefense

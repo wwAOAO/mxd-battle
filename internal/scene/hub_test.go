@@ -256,6 +256,7 @@ func TestHubSetEquipmentAppliesEquipmentStats(t *testing.T) {
 			Name:        "Bronze Sword",
 			Slot:        "weapon",
 			Stat:        combat.BaseStat{Strength: 5},
+			CombatStat:  combat.EquipmentCombatStat{PhysicalAttackMin: 7, PhysicalAttackMax: 11, AttackStartupMS: -20, AttackRecoveryMS: -30, AttackIntervalMS: -50},
 			Requirement: combat.EquipmentRequirement{Strength: 10},
 		},
 		"swift_boots": {
@@ -263,6 +264,7 @@ func TestHubSetEquipmentAppliesEquipmentStats(t *testing.T) {
 			Name:        "Swift Boots",
 			Slot:        "shoes",
 			Stat:        combat.BaseStat{Agility: 8},
+			CombatStat:  combat.EquipmentCombatStat{MoveSpeed: 25, Evasion: 3, AttackActiveMS: -10},
 			Requirement: combat.EquipmentRequirement{Agility: 8},
 		},
 	}
@@ -289,7 +291,7 @@ func TestHubSetEquipmentAppliesEquipmentStats(t *testing.T) {
 		t.Fatalf("join equipped: %v", err)
 	}
 
-	player, ok := hub.SetEquipment("equipped", []string{"bronze_sword", "swift_boots"})
+	player, _, ok := hub.SetEquipment("equipped", []string{"bronze_sword", "swift_boots"})
 	if !ok {
 		t.Fatal("expected equipment update to succeed")
 	}
@@ -299,8 +301,11 @@ func TestHubSetEquipmentAppliesEquipmentStats(t *testing.T) {
 	if player.Stat.Final.Strength != 15 || player.Stat.Final.Agility != 16 {
 		t.Fatalf("expected final stat to include equipment bonuses, got %+v", player.Stat.Final)
 	}
-	if player.CombatStat.PhysicalAttackMin != 15 || player.CombatStat.MoveSpeed != 2 {
+	if player.CombatStat.PhysicalAttackMin != 22 || player.CombatStat.PhysicalAttackMax != 26 || player.CombatStat.MoveSpeed != 27 || player.CombatStat.Evasion != 3 {
 		t.Fatalf("expected combat stat to reflect equipment bonuses, got %+v", player.CombatStat)
+	}
+	if player.CombatStat.AttackStartupMS != 130 || player.CombatStat.AttackActiveMS != 90 || player.CombatStat.AttackRecoveryMS != 320 || player.CombatStat.AttackIntervalMS != 550 {
+		t.Fatalf("expected attack timing stats to include equipment bonuses, got %+v", player.CombatStat)
 	}
 }
 
@@ -311,6 +316,7 @@ func TestHubSetEquipmentFiltersItemsByRequirement(t *testing.T) {
 			Name:        "Bronze Sword",
 			Slot:        "weapon",
 			Stat:        combat.BaseStat{Strength: 5},
+			CombatStat:  combat.EquipmentCombatStat{PhysicalAttackMin: 7, PhysicalAttackMax: 11},
 			Requirement: combat.EquipmentRequirement{Strength: 10},
 		},
 		"swift_boots": {
@@ -318,6 +324,7 @@ func TestHubSetEquipmentFiltersItemsByRequirement(t *testing.T) {
 			Name:        "Swift Boots",
 			Slot:        "shoes",
 			Stat:        combat.BaseStat{Agility: 8},
+			CombatStat:  combat.EquipmentCombatStat{MoveSpeed: 25, Evasion: 3},
 			Requirement: combat.EquipmentRequirement{Agility: 8},
 		},
 	}
@@ -344,7 +351,7 @@ func TestHubSetEquipmentFiltersItemsByRequirement(t *testing.T) {
 		t.Fatalf("join gated: %v", err)
 	}
 
-	player, ok := hub.SetEquipment("gated", []string{"bronze_sword", "swift_boots"})
+	player, _, ok := hub.SetEquipment("gated", []string{"bronze_sword", "swift_boots"})
 	if !ok {
 		t.Fatal("expected equipment update to succeed")
 	}
@@ -359,7 +366,7 @@ func TestHubSetEquipmentFiltersItemsByRequirement(t *testing.T) {
 	if !ok {
 		t.Fatal("expected primary stat update to succeed")
 	}
-	player, ok = hub.SetEquipment("gated", []string{"bronze_sword", "swift_boots"})
+	player, _, ok = hub.SetEquipment("gated", []string{"bronze_sword", "swift_boots"})
 	if !ok {
 		t.Fatal("expected gated equipment update to succeed after stat increase")
 	}
@@ -376,6 +383,205 @@ func TestHubSetEquipmentFiltersItemsByRequirement(t *testing.T) {
 	}
 	if player.Stat.Equipment.Strength != 0 || player.Stat.Equipment.Agility != 8 {
 		t.Fatalf("expected only valid equipment bonuses to remain, got %+v", player.Stat.Equipment)
+	}
+}
+
+func TestHubSetEquipmentFiltersJobLevelGenderAndExclusiveRules(t *testing.T) {
+	equipments := combat.EquipmentConfigs{
+		"bronze_sword": {
+			ID:          "bronze_sword",
+			Name:        "Bronze Sword",
+			Slot:        "weapon",
+			Stat:        combat.BaseStat{Strength: 5},
+			Requirement: combat.EquipmentRequirement{Strength: 10},
+			MinLevel:    5,
+			AllowedJobs: []string{"warrior"},
+		},
+		"apprentice_staff": {
+			ID:             "apprentice_staff",
+			Name:           "Apprentice Staff",
+			Slot:           "weapon",
+			Stat:           combat.BaseStat{Intelligence: 6},
+			Requirement:    combat.EquipmentRequirement{Intelligence: 12},
+			MinLevel:       5,
+			AllowedJobs:    []string{"mage"},
+			AllowedGenders: []string{"female"},
+		},
+		"lucky_charm": {
+			ID:               "lucky_charm",
+			Name:             "Lucky Charm",
+			Slot:             "accessory",
+			Stat:             combat.BaseStat{Luck: 6},
+			Requirement:      combat.EquipmentRequirement{Luck: 6},
+			ExclusiveGroup:   "trinket",
+			IncompatibleWith: []string{"traveler_cloak"},
+		},
+		"traveler_cloak": {
+			ID:               "traveler_cloak",
+			Name:             "Traveler Cloak",
+			Slot:             "armor",
+			Stat:             combat.BaseStat{HPMax: 80},
+			Requirement:      combat.EquipmentRequirement{Strength: 5},
+			ExclusiveGroup:   "trinket",
+			IncompatibleWith: []string{"lucky_charm"},
+		},
+	}
+	hub, err := NewHubWithJobsAndEquipment(nil, nil, testRoomMaps(), combat.JobStatConfigs{
+		"warrior": {Name: "Warrior"},
+		"mage":    {Name: "Mage"},
+	}, equipments)
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{
+		ID:      "rule-check",
+		JobCode: "warrior",
+		Gender:  "male",
+		Level:   4,
+		Stat: PlayerStatBundle{
+			Base: PlayerStat{Strength: 10, Intelligence: 12, Luck: 6, HP: 500, MP: 100, HPMax: 500, MPMax: 100},
+		},
+	}, &recordingPeer{}); err != nil {
+		t.Fatalf("join rule-check: %v", err)
+	}
+
+	player, _, ok := hub.SetEquipment("rule-check", []string{"bronze_sword", "apprentice_staff", "lucky_charm", "traveler_cloak"})
+	if !ok {
+		t.Fatal("expected equipment update to succeed")
+	}
+	if len(player.EquipmentIDs) != 1 || player.EquipmentIDs[0] != "lucky_charm" {
+		t.Fatalf("expected only lucky_charm to remain under initial restrictions, got %+v", player.EquipmentIDs)
+	}
+
+	hub.mu.Lock()
+	room := hub.rooms[RoomX]
+	mutated := room.players["rule-check"]
+	mutated.Level = 6
+	mutated.JobCode = "mage"
+	mutated.Gender = "female"
+	room.players["rule-check"] = mutated
+	hub.mu.Unlock()
+
+	player, _, ok = hub.SetEquipment("rule-check", []string{"bronze_sword", "apprentice_staff", "lucky_charm", "traveler_cloak"})
+	if !ok {
+		t.Fatal("expected second equipment update to succeed")
+	}
+	if len(player.EquipmentIDs) != 2 {
+		t.Fatalf("expected two items after relaxed restrictions, got %+v", player.EquipmentIDs)
+	}
+	if player.EquipmentIDs[0] != "apprentice_staff" {
+		t.Fatalf("expected job/gender-valid staff to occupy weapon slot, got %+v", player.EquipmentIDs)
+	}
+	if player.EquipmentIDs[1] != "lucky_charm" {
+		t.Fatalf("expected first trinket-compatible item to remain and block cloak, got %+v", player.EquipmentIDs)
+	}
+	if player.Stat.Equipment.Intelligence != 6 || player.Stat.Equipment.HPMax != 0 {
+		t.Fatalf("expected incompatible cloak to be rejected while charm stays equipped, got %+v", player.Stat.Equipment)
+	}
+}
+
+func TestHubSetEquipmentSupportsDualRingsAndTwoHandedWeapons(t *testing.T) {
+	equipments := combat.EquipmentConfigs{
+		"bronze_sword": {
+			ID:         "bronze_sword",
+			Name:       "Bronze Sword",
+			Slot:       "weapon_main",
+			Stat:       combat.BaseStat{Strength: 5},
+			CombatStat: combat.EquipmentCombatStat{PhysicalAttackMin: 5},
+		},
+		"wooden_shield": {
+			ID:         "wooden_shield",
+			Name:       "Wooden Shield",
+			Slot:       "weapon_sub",
+			Stat:       combat.BaseStat{HPMax: 60},
+			CombatStat: combat.EquipmentCombatStat{PhysicalDefense: 10, AttackRecoveryMS: -40},
+		},
+		"apprentice_staff": {
+			ID:         "apprentice_staff",
+			Name:       "Apprentice Staff",
+			Slot:       "weapon_main",
+			SlotCount:  2,
+			Stat:       combat.BaseStat{Intelligence: 6},
+			CombatStat: combat.EquipmentCombatStat{MagicAttackMin: 10, MagicAttackMax: 16, AttackIntervalMS: -80},
+		},
+		"silver_ring": {
+			ID:         "silver_ring",
+			Name:       "Silver Ring",
+			Slot:       "ring",
+			Stat:       combat.BaseStat{Luck: 4},
+			CombatStat: combat.EquipmentCombatStat{CritRate: 2},
+		},
+		"gold_ring": {
+			ID:         "gold_ring",
+			Name:       "Gold Ring",
+			Slot:       "ring",
+			Stat:       combat.BaseStat{Intelligence: 3},
+			CombatStat: combat.EquipmentCombatStat{MagicAttackMin: 4, MagicAttackMax: 8},
+		},
+	}
+	hub, err := NewHubWithJobsAndEquipment(nil, nil, testRoomMaps(), combat.JobStatConfigs{
+		"beginner": {Name: "Beginner"},
+	}, equipments)
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{
+		ID:    "slot-player",
+		Level: 10,
+		Stat: PlayerStatBundle{
+			Base: PlayerStat{Strength: 20, Intelligence: 20, Luck: 10, HP: 500, MP: 100, HPMax: 500, MPMax: 100},
+		},
+	}, &recordingPeer{}); err != nil {
+		t.Fatalf("join slot-player: %v", err)
+	}
+
+	player, selection, ok := hub.SetEquipment("slot-player", []string{"bronze_sword", "wooden_shield", "silver_ring", "gold_ring"})
+	if !ok {
+		t.Fatal("expected first equipment update to succeed")
+	}
+	if len(selection.Failures) != 0 {
+		t.Fatalf("expected no failures for mainhand+offhand+two rings, got %+v", selection.Failures)
+	}
+	if len(player.EquipmentIDs) != 4 {
+		t.Fatalf("expected four equipped items, got %+v", player.EquipmentIDs)
+	}
+	if player.Stat.Equipment.Luck != 4 || player.Stat.Equipment.Intelligence != 3 || player.Stat.Equipment.HPMax != 60 {
+		t.Fatalf("expected dual rings and offhand stats to apply, got %+v", player.Stat.Equipment)
+	}
+	if player.CombatStat.PhysicalAttackMin != 5 || player.CombatStat.PhysicalDefense != 10 || player.CombatStat.CritRate != 2 || player.CombatStat.MagicAttackMin != 4 || player.CombatStat.MagicAttackMax != 8 {
+		t.Fatalf("expected equipped combat stats to include sword, shield and two rings, got %+v", player.CombatStat)
+	}
+	if player.CombatStat.AttackRecoveryMS != 310 {
+		t.Fatalf("expected shield timing bonus to reduce recovery while equipped, got %+v", player.CombatStat)
+	}
+
+	player, selection, ok = hub.SetEquipment("slot-player", []string{"apprentice_staff", "wooden_shield", "silver_ring", "gold_ring"})
+	if !ok {
+		t.Fatal("expected second equipment update to succeed")
+	}
+	if len(player.EquipmentIDs) != 3 {
+		t.Fatalf("expected two-handed staff to block shield while keeping two rings, got %+v", player.EquipmentIDs)
+	}
+	if player.EquipmentIDs[0] != "apprentice_staff" {
+		t.Fatalf("expected two-handed staff to occupy main weapon slot, got %+v", player.EquipmentIDs)
+	}
+	foundSlotFailure := false
+	for _, failure := range selection.Failures {
+		if failure.EquipmentID == "wooden_shield" && failure.Code == "slot_occupied" {
+			foundSlotFailure = true
+		}
+	}
+	if !foundSlotFailure {
+		t.Fatalf("expected shield rejection reason to be returned, got %+v", selection.Failures)
+	}
+	if player.Stat.Equipment.HPMax != 0 || player.Stat.Equipment.Intelligence != 9 {
+		t.Fatalf("expected staff to apply and shield to be rejected, got %+v", player.Stat.Equipment)
+	}
+	if player.CombatStat.PhysicalDefense != 0 || player.CombatStat.MagicAttackMin != 14 || player.CombatStat.MagicAttackMax != 24 || player.CombatStat.CritRate != 2 {
+		t.Fatalf("expected blocked shield combat stat to be excluded while staff and rings remain, got %+v", player.CombatStat)
+	}
+	if player.CombatStat.AttackRecoveryMS != 350 || player.CombatStat.AttackIntervalMS != 520 {
+		t.Fatalf("expected blocked shield timing bonus to be excluded while staff timing bonus remains, got %+v", player.CombatStat)
 	}
 }
 
@@ -645,6 +851,98 @@ func TestHubSkillActionLocksNormalAttackAndOtherSkills(t *testing.T) {
 		t.Fatal("expected normal attack after skill action interval to be allowed")
 	}
 }
+func TestHubCastSpeedEquipmentReducesSkillStartupAndActionLock(t *testing.T) {
+	equipments := combat.EquipmentConfigs{
+		"swift_focus_staff": {
+			ID:         "swift_focus_staff",
+			Name:       "Swift Focus Staff",
+			Slot:       "weapon_main",
+			CombatStat: combat.EquipmentCombatStat{CastSpeed: 200},
+		},
+	}
+	hub, err := NewHubWithJobsAndEquipment(nil, nil, testRoomMaps(), combat.JobStatConfigs{
+		"mage": {
+			Name: "Mage",
+			Allocation: combat.CombatStatAllocation{
+				MagicAttackMin: combat.StatPercent{Intelligence: 100},
+				MagicAttackMax: combat.StatPercent{Intelligence: 100},
+			},
+		},
+	}, equipments, combat.SkillConfigs{
+		"magic_missile": {
+			ID:         "magic_missile",
+			Name:       "Magic Missile",
+			MPCost:     12,
+			CooldownMS: 900,
+			StartupMS:  300,
+			ActiveMS:   80,
+			RecoveryMS: 420,
+			Projectile: combat.ProjectileConfig{Speed: 760, Width: 48, Height: 32, MaxDistance: 420},
+			Damage:     combat.SkillDamageConfig{Base: 8, MagicRate: 1.2},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{
+		ID:           "alice",
+		JobCode:      "mage",
+		X:            500,
+		Y:            1500,
+		FacingX:      1,
+		EquipmentIDs: []string{"swift_focus_staff"},
+		Stat: PlayerStatBundle{
+			Base: PlayerStat{Intelligence: 30, HP: 500, MP: 100, HPMax: 500, MPMax: 100},
+		},
+	}, &recordingPeer{}); err != nil {
+		t.Fatalf("join alice: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{
+		ID:      "bob",
+		JobCode: "mage",
+		X:       650,
+		Y:       1500,
+		Stat: PlayerStatBundle{
+			Base: PlayerStat{Intelligence: 10, HP: 500, MP: 100, HPMax: 500, MPMax: 100},
+		},
+	}, &recordingPeer{}); err != nil {
+		t.Fatalf("join bob: %v", err)
+	}
+
+	now := testTime()
+	result, _, ok := hub.castSkillAt("alice", "magic_missile", now)
+	if !ok {
+		t.Fatal("expected cast to succeed")
+	}
+	if result.StartupMS != 225 || result.ActiveMS != 60 || result.RecoveryMS != 315 || result.IntervalMS != 600 {
+		t.Fatalf("expected skill timing to reflect cast-speed equipment, got %+v", result)
+	}
+
+	hub.StepPhysics(now.Add(224*time.Millisecond), 0.1)
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state before cast startup completes: %v", err)
+	}
+	if len(state.Projectiles) != 0 {
+		t.Fatalf("expected no projectile before reduced startup completes, got %+v", state.Projectiles)
+	}
+	if _, _, ok := hub.normalAttackAt("alice", now.Add(599*time.Millisecond)); ok {
+		t.Fatal("expected normal attack inside reduced skill interval to be blocked")
+	}
+
+	hub.StepPhysics(now.Add(225*time.Millisecond), 0.1)
+	state, err = hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state after reduced startup completes: %v", err)
+	}
+	if state.Players["bob"].Stat.Final.HP == 500 {
+		t.Fatalf("expected reduced startup to release projectile or apply hit by 225ms, got %+v", state.Players["bob"].Stat.Final)
+	}
+	if _, _, ok := hub.normalAttackAt("alice", now.Add(600*time.Millisecond)); !ok {
+		t.Fatal("expected normal attack after reduced skill interval to be allowed")
+	}
+}
+
 func TestHubCastMagicMissileConsumesMPDamagesTargetAndRespectsCooldown(t *testing.T) {
 	hub, err := NewHubWithJobs(nil, nil, testRoomMaps(), combat.JobStatConfigs{
 		"mage": {
@@ -1320,7 +1618,7 @@ func TestHubClampsMoveSpeedToMaxLimit(t *testing.T) {
 	}
 	initialX := initialState.Players["speed-clamped"].X
 
-	if _, ok := hub.SetInput("speed-clamped", 1); !ok {
+	if _, ok := hub.SetInput("speed-clamped", 1, 0); !ok {
 		t.Fatal("expected input to be accepted")
 	}
 	hub.StepPhysics(testTime(), 0.1)
@@ -1348,7 +1646,7 @@ func TestHubMovesHorizontallyFromServerInput(t *testing.T) {
 	}
 	initialX := initialState.Players["runner"].X
 
-	if _, ok := hub.SetInput("runner", 1); !ok {
+	if _, ok := hub.SetInput("runner", 1, 0); !ok {
 		t.Fatal("expected input to be accepted")
 	}
 	hub.StepPhysics(testTime(), 0.1)
@@ -1361,6 +1659,133 @@ func TestHubMovesHorizontallyFromServerInput(t *testing.T) {
 	expectedX := initialX + state.Map.MoveSpeed*0.1
 	if player.X != expectedX {
 		t.Fatalf("expected server speed to move player to %v, got %+v", expectedX, player)
+	}
+}
+
+func TestHubClimbsLadderFromVerticalInput(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_ladder_climb",
+			Width:        1600,
+			Height:       1600,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Ladders: []world.Ladder{
+				{ID: "ladder_1", X: 300, Y: 1100, Width: 40, Height: 400, ClimbSpeed: 240},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "climber", X: 320, Y: 1450}, &recordingPeer{}); err != nil {
+		t.Fatalf("join climber: %v", err)
+	}
+
+	player, ok := hub.SetInput("climber", 0, -1)
+	if !ok {
+		t.Fatal("expected ladder input to be accepted")
+	}
+	if !player.OnLadder || player.LadderID != "ladder_1" {
+		t.Fatalf("expected player to attach to ladder, got %+v", player)
+	}
+
+	hub.StepPhysics(testTime(), 0.1)
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	player = state.Players["climber"]
+	if !player.OnLadder || player.Y >= 1450 {
+		t.Fatalf("expected player to climb upward on ladder, got %+v", player)
+	}
+	if player.VY >= 0 {
+		t.Fatalf("expected upward ladder velocity, got %+v", player)
+	}
+}
+
+func TestHubAttachesLadderFromTopWhenPressingDown(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_ladder_top_attach",
+			Width:        1600,
+			Height:       1600,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Platforms: []world.Platform{
+				{ID: "top_platform", X: 260, Y: 1100, Width: 200, Height: 40},
+			},
+			Ladders: []world.Ladder{
+				{ID: "ladder_1", X: 300, Y: 1100, Width: 40, Height: 300, ClimbSpeed: 240},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "top-climber", X: 320, Y: 1100}, &recordingPeer{}); err != nil {
+		t.Fatalf("join top-climber: %v", err)
+	}
+
+	player, ok := hub.SetInput("top-climber", 0, 1)
+	if !ok {
+		t.Fatal("expected ladder down input to be accepted")
+	}
+	if !player.OnLadder || player.LadderID != "ladder_1" {
+		t.Fatalf("expected player to attach to ladder from the top, got %+v", player)
+	}
+}
+
+func TestHubLeavesLadderAndFallsWhenNoLongerAttached(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_ladder_detach",
+			Width:        1600,
+			Height:       1600,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Ladders: []world.Ladder{
+				{ID: "ladder_1", X: 300, Y: 1100, Width: 40, Height: 260, ClimbSpeed: 240},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "faller", X: 320, Y: 1320}, &recordingPeer{}); err != nil {
+		t.Fatalf("join faller: %v", err)
+	}
+
+	if _, ok := hub.SetInput("faller", 0, -1); !ok {
+		t.Fatal("expected ladder input to be accepted")
+	}
+	hub.StepPhysics(testTime(), 0.1)
+	if _, ok := hub.SetInput("faller", 1, 0); !ok {
+		t.Fatal("expected horizontal input to be accepted")
+	}
+	for i := 1; i <= 4; i++ {
+		hub.StepPhysics(testTime().Add(time.Duration(i)*100*time.Millisecond), 0.1)
+	}
+
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	player := state.Players["faller"]
+	if player.OnLadder {
+		t.Fatalf("expected player to leave ladder after moving away, got %+v", player)
+	}
+	if player.VY <= 0 {
+		t.Fatalf("expected gravity to resume after leaving ladder, got %+v", player)
 	}
 }
 

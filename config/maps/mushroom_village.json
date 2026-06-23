@@ -1,0 +1,120 @@
+{
+  "id": "mushroom_village",
+  "name": "Mushroom Village",
+  "width": 2400,
+  "height": 1500,
+  "groundY": 1500,
+  "gravity": 2600,
+  "jumpVelocity": -980,
+  "moveSpeed": 420,
+  "spawn": {
+    "x": 180,
+    "y": 1500
+  },
+  "terrain": [
+    {
+      "id": "terrain_1",
+      "points": [
+        {
+          "x": 2,
+          "y": 1303
+        },
+        {
+          "x": 408,
+          "y": 1303
+        },
+        {
+          "x": 1497,
+          "y": 1307
+        }
+      ]
+    }
+  ],
+  "polygons": [],
+  "platforms": [
+    {
+      "id": "platform_1",
+      "x": 1298,
+      "y": 1000,
+      "width": 211,
+      "height": 84
+    },
+    {
+      "id": "platform_2",
+      "x": 10,
+      "y": 1061,
+      "width": 988,
+      "height": 67
+    },
+    {
+      "id": "platform_3",
+      "x": 946,
+      "y": 957,
+      "width": 251,
+      "height": 101
+    },
+    {
+      "id": "platform_4",
+      "x": 1126,
+      "y": 871,
+      "width": 1269,
+      "height": 94
+    },
+    {
+      "id": "platform_5",
+      "x": 1500,
+      "y": 393,
+      "width": 898,
+      "height": 78
+    }
+  ],
+  "walls": [
+    {
+      "id": "wall_1",
+      "x": 1503,
+      "y": 1198,
+      "width": 80,
+      "height": 300
+    },
+    {
+      "id": "wall_2",
+      "x": 1580,
+      "y": 1095,
+      "width": 818,
+      "height": 405
+    },
+    {
+      "id": "wall_3",
+      "x": 532,
+      "y": 673,
+      "width": 120,
+      "height": 95
+    }
+  ],
+  "ladders": [
+    {
+      "id": "ladder_1",
+      "x": 1880,
+      "y": 405,
+      "width": 51,
+      "height": 471,
+      "climbSpeed": 240
+    }
+  ],
+  "portals": [
+    {
+      "id": "portal_1",
+      "targetRoomId": "Treasure_Island.city",
+      "area": {
+        "x": 1963,
+        "y": 975,
+        "width": 73,
+        "height": 119
+      },
+      "target": {
+        "x": 120,
+        "y": 1500
+      }
+    }
+  ]
+}

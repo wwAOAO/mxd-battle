@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MXD Battle World Sync Test</title>
+    <title>MXD Battle Sync Test</title>
     <style>
       * {
         box-sizing: border-box;
@@ -109,6 +109,57 @@
         font-size: 14px;
         font-weight: 750;
       }
+      .hud-panel {
+        gap: 8px;
+      }
+
+      .hud-lines {
+        display: grid;
+        gap: 6px;
+        color: #243047;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .hud-bars {
+        display: grid;
+        gap: 8px;
+      }
+
+      .hud-bar {
+        display: grid;
+        gap: 4px;
+      }
+
+      .hud-bar-label {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: #243047;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .hud-bar-track {
+        overflow: hidden;
+        height: 14px;
+        border: 1px solid #c7d1df;
+        border-radius: 999px;
+        background: #d7dee9;
+      }
+
+      .hud-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .hud-bar-fill.hp {
+        background: #cf3d4d;
+      }
+
+      .hud-bar-fill.mp {
+        background: #2c6eea;
+      }
 
       .stat-grid {
         display: grid;
@@ -141,6 +192,13 @@
 
       .equipment-requirement.unmet {
         color: #c2410c;
+      }
+
+      .equipment-feedback {
+        color: #9a3412;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
       }
 
       .status {
@@ -207,13 +265,13 @@
   <body>
     <main>
       <aside>
-        <h1>MXD Battle World Sync Test</h1>
+        <h1>MXD Battle Sync Test</h1>
 
         <label>
           Room
           <select id="room">
-            <option value="Rainbow_Island.practice">
-              Rainbow_Island.practice
+            <option value="Rainbow_Island.mushroom_village">
+              Rainbow_Island.mushroom_village
             </option>
             <option value="Treasure_Island.city">Treasure_Island.city</option>
           </select>
@@ -229,16 +287,47 @@
           <input id="name" value="Hero" />
         </label>
 
+        <label>
+          Gender
+          <select id="gender">
+            <option value="">None</option>
+            <option value="male">male</option>
+            <option value="female">female</option>
+          </select>
+        </label>
+
         <div class="row">
           <button id="connect">Connect</button>
           <button id="disconnect" class="secondary">Disconnect</button>
         </div>
 
-        <div id="status" class="status">Disconnected</div>
-        <div class="status">
-          Left/Right move, C jumps, Down+C drops, Up uses portal, X attacks, Z
-          casts.
-        </div>
+                <section class="panel hud-panel" id="character-panel">
+          <p class="panel-title">Character</p>
+          <div id="hud-lines" class="hud-lines">
+            <div>Not connected</div>
+          </div>
+          <div class="hud-bars">
+            <div class="hud-bar">
+              <div class="hud-bar-label">
+                <span>HP</span>
+                <span id="hud-hp-text">0 / 0</span>
+              </div>
+              <div class="hud-bar-track">
+                <div id="hud-hp-fill" class="hud-bar-fill hp" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="hud-bar">
+              <div class="hud-bar-label">
+                <span>MP</span>
+                <span id="hud-mp-text">0 / 0</span>
+              </div>
+              <div class="hud-bar-track">
+                <div id="hud-mp-fill" class="hud-bar-fill mp" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
 
         <section class="panel" id="primary-stat-panel">
           <p class="panel-title">Primary Stat</p>
@@ -283,6 +372,7 @@
         <section class="panel" id="equipment-panel">
           <p class="panel-title">Equipment</p>
           <div id="equipment-controls" class="stat-grid"></div>
+          <div id="equipment-feedback" class="equipment-feedback"></div>
         </section>
 
         <pre id="log"></pre>
@@ -314,9 +404,11 @@
       const attacks = [];
       const damageTexts = [];
       let lastInputX = 0;
+      let lastInputY = 0;
       let lastFrameAt = performance.now();
       let jobStatConfigs = {};
       let equipmentConfigs = {};
+      let lastEquipFailures = [];
       const statInputIds = {
         strength: "stat-strength",
         intelligence: "stat-intelligence",
@@ -348,6 +440,7 @@
           room: $("room").value,
           player: $("player").value.trim(),
           name: $("name").value.trim(),
+          gender: $("gender").value,
         });
         socket = new WebSocket(`ws://${location.host}/ws?${params}`);
 
@@ -479,12 +572,13 @@
         );
       }
 
-      function sendInput(inputX) {
+      function sendInput(inputX, inputY) {
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
-        if (inputX === lastInputX) return;
+        if (inputX === lastInputX && inputY === lastInputY) return;
 
         lastInputX = inputX;
-        socket.send(JSON.stringify({ type: "input", inputX }));
+        lastInputY = inputY;
+        socket.send(JSON.stringify({ type: "input", inputX, inputY }));
       }
 
       function applyEvent(event) {
@@ -497,6 +591,7 @@
           world.polygons = event.state.map.polygons || [];
           world.platforms = event.state.map.platforms || [];
           world.walls = event.state.map.walls || [];
+          world.ladders = event.state.map.ladders || [];
           world.portals = event.state.map.portals || [];
           log("map geometry", {
             room: event.state.id,
@@ -504,6 +599,7 @@
             polygons: world.polygons.length,
             platforms: world.platforms.length,
             walls: world.walls.length,
+            ladders: world.ladders.length,
           });
           $("room").value = event.state.id;
           players.clear();
@@ -516,6 +612,12 @@
           });
           syncPrimaryStatForm();
           renderEquipmentPanel();
+          renderSelfHud();
+        }
+        if (event.equipResult) {
+          lastEquipFailures = Array.isArray(event.equipResult.failures)
+            ? event.equipResult.failures
+            : [];
         }
         if (event.player) {
           const previous = players.get(event.player.id);
@@ -525,8 +627,12 @@
             displayY: previous ? previous.displayY : event.player.y,
           });
           if (event.player.id === $("player").value.trim()) {
+            $("gender").value = event.player.gender || "";
+          }
+          if (event.player.id === $("player").value.trim()) {
             syncPrimaryStatForm();
             renderEquipmentPanel();
+          renderSelfHud();
           }
         }
         if (event.type === "player_attacked" && event.attack) {
@@ -616,28 +722,72 @@
         return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
       }
 
-      function groupEquipmentsBySlot() {
-        const groups = new Map();
-        for (const [id, config] of Object.entries(equipmentConfigs)) {
-          const slot = config.slot || "misc";
-          const items = groups.get(slot) || [];
-          items.push({ id, ...config });
-          groups.set(slot, items);
-        }
-        return Array.from(groups.entries()).sort((a, b) =>
-          a[0].localeCompare(b[0]),
-        );
+      function equipmentPanelSlots() {
+        return [
+          "weapon_main",
+          "weapon_sub",
+          "ring1",
+          "ring2",
+          "armor",
+          "shoes",
+          "accessory",
+          "misc",
+        ];
       }
 
-      function getEquipmentRequirementText(requirement) {
-        if (!requirement) return "";
-        const entries = [
-          ["STR", requirement.strength],
-          ["INT", requirement.intelligence],
-          ["AGI", requirement.agility],
-          ["LUK", requirement.luck],
-        ].filter(([, value]) => Number(value) > 0);
-        return entries.map(([label, value]) => label + " " + value).join("  ");
+      function groupEquipmentsBySlot() {
+        const groups = new Map();
+        for (const slot of equipmentPanelSlots()) {
+          groups.set(slot, []);
+        }
+        for (const [id, config] of Object.entries(equipmentConfigs)) {
+          const occupied = Array.isArray(config.occupiesSlots)
+            ? config.occupiesSlots
+            : [];
+          const slots =
+            occupied.length > 0 ? occupied : [config.slot || "misc"];
+          for (const slot of slots) {
+            const items = groups.get(slot) || [];
+            items.push({ id, ...config });
+            groups.set(slot, items);
+          }
+        }
+        return equipmentPanelSlots().map((slot) => [
+          slot,
+          groups.get(slot) || [],
+        ]);
+      }
+
+      function getEquipmentRequirementText(requirement, config) {
+        const entries = [];
+        if (requirement) {
+          entries.push(
+            ...[
+              ["STR", requirement.strength],
+              ["INT", requirement.intelligence],
+              ["AGI", requirement.agility],
+              ["LUK", requirement.luck],
+            ]
+              .filter(([, value]) => Number(value) > 0)
+              .map(([label, value]) => label + " " + value),
+          );
+        }
+        if (Number(config?.minLevel) > 0) {
+          entries.push("Lv " + Number(config.minLevel));
+        }
+        if (
+          Array.isArray(config?.allowedJobs) &&
+          config.allowedJobs.length > 0
+        ) {
+          entries.push("Job " + config.allowedJobs.join("/"));
+        }
+        if (
+          Array.isArray(config?.allowedGenders) &&
+          config.allowedGenders.length > 0
+        ) {
+          entries.push("Gender " + config.allowedGenders.join("/"));
+        }
+        return entries.join("  ");
       }
 
       function getRequirementStatSource(player) {
@@ -651,24 +801,75 @@
         if (!config) return false;
         const stat = getRequirementStatSource(player);
         const requirement = config.requirement || {};
+        const level = Number(player?.level) || 0;
+        const jobCode =
+          player?.jobCode ||
+          new URLSearchParams(location.search).get("job") ||
+          "";
+        const gender = player?.gender || $("gender").value || "";
+        const matchesJob =
+          !Array.isArray(config.allowedJobs) ||
+          config.allowedJobs.length === 0 ||
+          config.allowedJobs.some(
+            (value) =>
+              String(value).toLowerCase() === String(jobCode).toLowerCase(),
+          );
+        const matchesGender =
+          !Array.isArray(config.allowedGenders) ||
+          config.allowedGenders.length === 0 ||
+          config.allowedGenders.some(
+            (value) =>
+              String(value).toLowerCase() === String(gender).toLowerCase(),
+          );
         return (
           (Number(stat.strength) || 0) >= (Number(requirement.strength) || 0) &&
           (Number(stat.intelligence) || 0) >=
             (Number(requirement.intelligence) || 0) &&
           (Number(stat.agility) || 0) >= (Number(requirement.agility) || 0) &&
-          (Number(stat.luck) || 0) >= (Number(requirement.luck) || 0)
+          (Number(stat.luck) || 0) >= (Number(requirement.luck) || 0) &&
+          level >= (Number(config.minLevel) || 0) &&
+          matchesJob &&
+          matchesGender
         );
       }
 
       function sendEquipment() {
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
         const controls = document.querySelectorAll("[data-equipment-slot]");
-        const equipmentIds = [];
+        const equipmentsBySlot = {};
         for (const control of controls) {
-          if (control.value) equipmentIds.push(control.value);
+          if (control.value)
+            equipmentsBySlot[control.dataset.equipmentSlot] = control.value;
         }
-        socket.send(JSON.stringify({ type: "equipment", equipmentIds }));
-        log("equipment sent", { equipmentIds });
+        socket.send(JSON.stringify({ type: "equipment", equipmentsBySlot }));
+        log("equipment sent", { equipmentsBySlot });
+      }
+
+      function eventlessEquipmentSlots(player, configs) {
+        const result = {};
+        const ids = Array.isArray(player?.equipmentIds)
+          ? player.equipmentIds
+          : [];
+        for (const id of ids) {
+          const config = configs[id];
+          if (!config) continue;
+          const slots = Array.isArray(config.occupiesSlots)
+            ? config.occupiesSlots
+            : [];
+          if ((config.slot || "") === "ring" && slots.length <= 1) {
+            if (!result.ring1) result.ring1 = id;
+            else if (!result.ring2) result.ring2 = id;
+            continue;
+          }
+          if (slots.length > 0) {
+            for (const slot of slots) {
+              result[slot] = id;
+            }
+            continue;
+          }
+          result[config.slot || "misc"] = id;
+        }
+        return result;
       }
 
       function renderEquipmentPanel() {
@@ -719,6 +920,7 @@
           if (selectedConfig) {
             const requirementText = getEquipmentRequirementText(
               selectedConfig.requirement,
+              selectedConfig,
             );
             if (requirementText) {
               hint.textContent = "Require: " + requirementText;
@@ -763,7 +965,11 @@
         players.set(playerId, {
           ...self,
           stat: nextStat,
-          combatStat: calculateCombatStat(nextStat.final, self.jobCode),
+          combatStat: calculateCombatStat(
+            nextStat.final,
+            self.jobCode,
+            aggregateSelectedEquipmentCombatStat(),
+          ),
         });
       }
 
@@ -799,46 +1005,116 @@
         next.mp = Math.min(next.mp, next.mpMax);
         return next;
       }
-      function calculateCombatStat(stat, jobCode) {
+
+      function calculateCombatStat(stat, jobCode, equipmentCombatStat = {}) {
         const code = jobCode || "beginner";
         const job = jobStatConfigs[code] || jobStatConfigs.beginner || {};
         const allocation = job.allocation || {};
 
         const attackTiming = calculateAttackTiming(stat, job);
         return {
-          physicalAttackMin: calculateAllocatedStat(
-            stat,
-            allocation.physicalAttackMin,
+          physicalAttackMin:
+            calculateAllocatedStat(stat, allocation.physicalAttackMin) +
+            (Number(equipmentCombatStat.physicalAttackMin) || 0),
+          physicalAttackMax:
+            calculateAllocatedStat(stat, allocation.physicalAttackMax) +
+            (Number(equipmentCombatStat.physicalAttackMax) || 0),
+          magicAttackMin:
+            calculateAllocatedStat(stat, allocation.magicAttackMin) +
+            (Number(equipmentCombatStat.magicAttackMin) || 0),
+          magicAttackMax:
+            calculateAllocatedStat(stat, allocation.magicAttackMax) +
+            (Number(equipmentCombatStat.magicAttackMax) || 0),
+          physicalDefense:
+            calculateAllocatedStat(stat, allocation.physicalDefense) +
+            (Number(equipmentCombatStat.physicalDefense) || 0),
+          magicDefense:
+            calculateAllocatedStat(stat, allocation.magicDefense) +
+            (Number(equipmentCombatStat.magicDefense) || 0),
+          moveSpeed: Math.max(
+            0,
+            Math.min(
+              600,
+              calculateAllocatedStat(stat, allocation.moveSpeed) +
+                (Number(equipmentCombatStat.moveSpeed) || 0),
+            ),
           ),
-          physicalAttackMax: calculateAllocatedStat(
-            stat,
-            allocation.physicalAttackMax,
+          evasion:
+            calculateAllocatedStat(stat, allocation.evasion) +
+            (Number(equipmentCombatStat.evasion) || 0),
+          accuracy:
+            calculateAllocatedStat(stat, allocation.accuracy) +
+            (Number(equipmentCombatStat.accuracy) || 0),
+          critRate:
+            calculateAllocatedStat(stat, allocation.critRate) +
+            (Number(equipmentCombatStat.critRate) || 0),
+          critDamage:
+            calculateAllocatedStat(stat, allocation.critDamage) +
+            (Number(equipmentCombatStat.critDamage) || 0),
+          hpRecovery:
+            calculateAllocatedFloatStat(stat, allocation.hpRecovery) +
+            (Number(equipmentCombatStat.hpRecovery) || 0),
+          mpRecovery:
+            calculateAllocatedFloatStat(stat, allocation.mpRecovery) +
+            (Number(equipmentCombatStat.mpRecovery) || 0),
+          castSpeed: Number(equipmentCombatStat.castSpeed) || 0,
+          attackStartupMs: Math.max(
+            0,
+            attackTiming.startupMs +
+              (Number(equipmentCombatStat.attackStartupMs) || 0),
           ),
-          magicAttackMin: calculateAllocatedStat(
-            stat,
-            allocation.magicAttackMin,
+          attackActiveMs: Math.max(
+            0,
+            attackTiming.activeMs +
+              (Number(equipmentCombatStat.attackActiveMs) || 0),
           ),
-          magicAttackMax: calculateAllocatedStat(
-            stat,
-            allocation.magicAttackMax,
+          attackRecoveryMs: Math.max(
+            0,
+            attackTiming.recoveryMs +
+              (Number(equipmentCombatStat.attackRecoveryMs) || 0),
           ),
-          physicalDefense: calculateAllocatedStat(
-            stat,
-            allocation.physicalDefense,
+          attackIntervalMs: Math.max(
+            0,
+            attackTiming.intervalMs +
+              (Number(equipmentCombatStat.attackIntervalMs) || 0),
           ),
-          magicDefense: calculateAllocatedStat(stat, allocation.magicDefense),
-          moveSpeed: calculateAllocatedStat(stat, allocation.moveSpeed),
-          evasion: calculateAllocatedStat(stat, allocation.evasion),
-          accuracy: calculateAllocatedStat(stat, allocation.accuracy),
-          critRate: calculateAllocatedStat(stat, allocation.critRate),
-          critDamage: calculateAllocatedStat(stat, allocation.critDamage),
-          hpRecovery: calculateAllocatedFloatStat(stat, allocation.hpRecovery),
-          mpRecovery: calculateAllocatedFloatStat(stat, allocation.mpRecovery),
-          attackStartupMs: attackTiming.startupMs,
-          attackActiveMs: attackTiming.activeMs,
-          attackRecoveryMs: attackTiming.recoveryMs,
-          attackIntervalMs: attackTiming.intervalMs,
         };
+      }
+
+      function aggregateSelectedEquipmentCombatStat() {
+        const total = {
+          physicalAttackMin: 0,
+          physicalAttackMax: 0,
+          magicAttackMin: 0,
+          magicAttackMax: 0,
+          physicalDefense: 0,
+          magicDefense: 0,
+          moveSpeed: 0,
+          evasion: 0,
+          accuracy: 0,
+          critRate: 0,
+          critDamage: 0,
+          hpRecovery: 0,
+          mpRecovery: 0,
+          castSpeed: 0,
+          attackStartupMs: 0,
+          attackActiveMs: 0,
+          attackRecoveryMs: 0,
+          attackIntervalMs: 0,
+        };
+        const selectedIDs = new Set();
+        for (const slot of equipmentPanelSlots()) {
+          const select = document.getElementById("equipment-" + slot);
+          if (!select || !select.value || selectedIDs.has(select.value))
+            continue;
+          selectedIDs.add(select.value);
+          const config = equipmentConfigs[select.value];
+          const combatStat = (config && config.combatStat) || {};
+          for (const key of Object.keys(total)) {
+            total[key] += Number(combatStat[key]) || 0;
+          }
+        }
+        return total;
       }
 
       function calculateAttackTiming(stat, job) {
@@ -1071,6 +1347,27 @@
           }
         }
 
+        if (Array.isArray(world.ladders)) {
+          for (const ladder of world.ladders) {
+            const x = offsetX + ladder.x * scale;
+            const y = offsetY + ladder.y * scale;
+            const width = ladder.width * scale;
+            const height = ladder.height * scale;
+            ctx.fillStyle = "rgba(194, 120, 61, 0.18)";
+            ctx.fillRect(x, y, width, height);
+            ctx.strokeStyle = "#9a5d23";
+            ctx.strokeRect(x, y, width, height);
+            const rungCount = Math.max(2, Math.floor(ladder.height / 42));
+            for (let i = 0; i <= rungCount; i++) {
+              const rungY = y + (height * i) / rungCount;
+              ctx.beginPath();
+              ctx.moveTo(x, rungY);
+              ctx.lineTo(x + width, rungY);
+              ctx.stroke();
+            }
+          }
+        }
+
         if (Array.isArray(world.portals)) {
           for (const portal of world.portals) {
             const area = portal.area;
@@ -1116,7 +1413,6 @@
         }
 
         drawDamageTexts(offsetX, offsetY, scale);
-        drawSelfHud();
         requestAnimationFrame(draw);
       }
 
@@ -1247,112 +1543,47 @@
         }
       }
 
-      function drawSelfHud() {
+      function renderSelfHud() {
         const self = players.get($("player").value.trim());
-        if (!self || !self.stat) return;
+        const hudLines = $("hud-lines");
+        const hpText = $("hud-hp-text");
+        const mpText = $("hud-mp-text");
+        const hpFill = $("hud-hp-fill");
+        const mpFill = $("hud-mp-fill");
+        if (!hudLines || !hpText || !mpText || !hpFill || !mpFill) return;
 
-        const x = 20;
-        const y = 24;
-        const width = 260;
-        const height = 16;
-        const panelHeight = 250;
+        if (!self || !self.stat) {
+          hudLines.innerHTML = "<div>Not connected</div>";
+          hpText.textContent = "0 / 0";
+          mpText.textContent = "0 / 0";
+          hpFill.style.width = "0%";
+          mpFill.style.width = "0%";
+          return;
+        }
+
         const combat = self.combatStat || {};
         const finalStat = self.stat.final || self.stat;
+        const hp = Math.max(0, Number(finalStat.hp) || 0);
+        const hpMax = Math.max(1, Number(finalStat.hpMax) || 1);
+        const mp = Math.max(0, Number(finalStat.mp) || 0);
+        const mpMax = Math.max(1, Number(finalStat.mpMax) || 1);
 
-        ctx.fillStyle = "rgba(17, 24, 39, 0.82)";
-        ctx.fillRect(x - 10, y - 14, width + 20, panelHeight);
+        hudLines.innerHTML = `
+          <div>Lv ${self.level || 1}  EXP ${self.exp || "0"}</div>
+          <div>STR ${finalStat.strength || 0}   INT ${finalStat.intelligence || 0}</div>
+          <div>AGI ${finalStat.agility || 0}   LUK ${finalStat.luck || 0}</div>
+          <div>PATK ${combat.physicalAttackMin || 0}-${combat.physicalAttackMax || 0}   MATK ${combat.magicAttackMin || 0}-${combat.magicAttackMax || 0}</div>
+          <div>PDEF ${combat.physicalDefense || 0}   MDEF ${combat.magicDefense || 0}</div>
+          <div>SPD ${combat.moveSpeed || 0}   EVA ${combat.evasion || 0}   ACC ${combat.accuracy || 0}</div>
+          <div>CRIT ${combat.critRate || 0}   CDMG ${combat.critDamage || 0}</div>
+          <div>CAST ${combat.castSpeed || 0}   REC HP ${formatStatNumber(combat.hpRecovery)}/s   MP ${formatStatNumber(combat.mpRecovery)}/s</div>
+          <div>ATK ${combat.attackStartupMs || 0}+${combat.attackActiveMs || 0}+${combat.attackRecoveryMs || 0}=${combat.attackIntervalMs || 0}ms</div>
+        `;
 
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "13px system-ui";
-        ctx.fillText(`Lv ${self.level || 1}  EXP ${self.exp || "0"}`, x, y);
-
-        ctx.font = "12px system-ui";
-        ctx.fillStyle = "#dbe7ff";
-        ctx.fillText(
-          `STR ${finalStat.strength || 0}   INT ${finalStat.intelligence || 0}`,
-          x,
-          y + 24,
-        );
-        ctx.fillText(
-          `AGI ${finalStat.agility || 0}   LUK ${finalStat.luck || 0}`,
-          x,
-          y + 44,
-        );
-
-        ctx.fillText(
-          `PATK ${combat.physicalAttackMin || 0}-${combat.physicalAttackMax || 0}   MATK ${combat.magicAttackMin || 0}-${combat.magicAttackMax || 0}`,
-          x,
-          y + 68,
-        );
-        ctx.fillText(
-          `PDEF ${combat.physicalDefense || 0}   MDEF ${combat.magicDefense || 0}`,
-          x,
-          y + 88,
-        );
-        ctx.fillText(
-          `SPD ${combat.moveSpeed || 0}   EVA ${combat.evasion || 0}   ACC ${combat.accuracy || 0}`,
-          x,
-          y + 108,
-        );
-        ctx.fillText(
-          `CRIT ${combat.critRate || 0}   CDMG ${combat.critDamage || 0}`,
-          x,
-          y + 128,
-        );
-        ctx.fillText(
-          `REC HP ${formatStatNumber(combat.hpRecovery)}/s   MP ${formatStatNumber(combat.mpRecovery)}/s`,
-          x,
-          y + 148,
-        );
-        ctx.fillText(
-          `ATK ${combat.attackStartupMs || 0}+${combat.attackActiveMs || 0}+${combat.attackRecoveryMs || 0}=${combat.attackIntervalMs || 0}ms`,
-          x,
-          y + 168,
-        );
-
-        drawStatBar(
-          x,
-          y + 188,
-          width,
-          height,
-          "#cf3d4d",
-          "HP",
-          finalStat.hp,
-          finalStat.hpMax,
-        );
-        drawStatBar(
-          x,
-          y + 216,
-          width,
-          height,
-          "#2c6eea",
-          "MP",
-          finalStat.mp,
-          finalStat.mpMax,
-        );
-      }
-
-      function drawStatBar(x, y, width, height, color, label, value, maxValue) {
-        const safeValue = Math.max(0, Number(value) || 0);
-        const safeMax = Math.max(1, Number(maxValue) || 1);
-        const ratio = Math.max(0, Math.min(1, safeValue / safeMax));
-
-        ctx.fillStyle = "#303642";
-        ctx.fillRect(x, y, width, height);
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, width * ratio, height);
-        ctx.strokeStyle = "#111827";
-        ctx.strokeRect(x, y, width, height);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "12px system-ui";
-        ctx.textBaseline = "middle";
-        ctx.fillText(
-          `${label} ${safeValue} / ${safeMax}`,
-          x + 8,
-          y + height / 2,
-        );
-        ctx.textBaseline = "alphabetic";
+        hpText.textContent = `${hp} / ${hpMax}`;
+        mpText.textContent = `${mp} / ${mpMax}`;
+        hpFill.style.width = `${Math.max(0, Math.min(100, (hp / hpMax) * 100))}%`;
+        mpFill.style.width = `${Math.max(0, Math.min(100, (mp / mpMax) * 100))}%`;
       }
 
       $("connect").addEventListener("click", connect);
@@ -1363,6 +1594,7 @@
       loadRooms();
       loadJobStats();
       loadEquipmentStats();
+      renderSelfHud();
 
       window.addEventListener("keydown", (event) => {
         if (
@@ -1374,7 +1606,9 @@
 
         if (event.key === "ArrowUp") {
           event.preventDefault();
-          if (!pressedKeys.has(event.key)) usePortal();
+          const self = players.get($("player").value.trim());
+          if (!pressedKeys.has(event.key) && !(self && self.onLadder))
+            usePortal();
           pressedKeys.add(event.key);
           return;
         }
@@ -1424,9 +1658,12 @@
 
       function controlLoop(now) {
         let inputX = 0;
+        let inputY = 0;
         if (pressedKeys.has("ArrowLeft")) inputX -= 1;
         if (pressedKeys.has("ArrowRight")) inputX += 1;
-        sendInput(inputX);
+        if (pressedKeys.has("ArrowUp")) inputY -= 1;
+        if (pressedKeys.has("ArrowDown")) inputY += 1;
+        sendInput(inputX, inputY);
         requestAnimationFrame(controlLoop);
       }
 
@@ -1436,3 +1673,8 @@
     </script>
   </body>
 </html>
+
+
+
+
+

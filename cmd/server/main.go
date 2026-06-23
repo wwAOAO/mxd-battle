@@ -35,6 +35,7 @@ func (p sceneRoleProvider) GetAccountRole(ctx context.Context, accountID string,
 		Level:     role.Level,
 		Exp:       role.Exp,
 		JobCode:   role.JobCode,
+		Gender:    "",
 		Stat: scene.PlayerStatBundle{
 			Base: scene.PlayerStat{
 				Strength:     role.Strength,

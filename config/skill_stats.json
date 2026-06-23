@@ -4,6 +4,9 @@
     "name": "Magic Missile",
     "mpCost": 12,
     "cooldownMs": 900,
+    "startupMs": 300,
+    "activeMs": 80,
+    "recoveryMs": 420,
     "range": 420,
     "width": 420,
     "height": 72,
@@ -19,3 +22,4 @@
     }
   }
 }
+

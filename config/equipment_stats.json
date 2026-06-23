@@ -2,25 +2,57 @@
   "bronze_sword": {
     "id": "bronze_sword",
     "name": "Bronze Sword",
-    "slot": "weapon",
+    "slot": "weapon_main",
     "stat": {
       "strength": 5,
       "hpMax": 40
     },
     "requirement": {
       "strength": 10
+    },
+    "minLevel": 5,
+    "allowedJobs": ["warrior"],
+    "combatStat": {
+      "physicalAttackMin": 7,
+      "physicalAttackMax": 12,
+      "attackStartupMs": -20,
+      "attackRecoveryMs": -30,
+      "attackIntervalMs": -50
     }
   },
   "apprentice_staff": {
     "id": "apprentice_staff",
     "name": "Apprentice Staff",
-    "slot": "weapon",
+    "slot": "weapon_main",
+    "slotCount": 2,
     "stat": {
       "intelligence": 6,
       "mpMax": 35
     },
     "requirement": {
       "intelligence": 12
+    },
+    "minLevel": 5,
+    "allowedJobs": ["mage"],
+    "combatStat": {
+      "magicAttackMin": 10,
+      "magicAttackMax": 16,
+      "castSpeed": 120,
+      "attackIntervalMs": -80
+    }
+  },
+  "wooden_shield": {
+    "id": "wooden_shield",
+    "name": "Wooden Shield",
+    "slot": "weapon_sub",
+    "stat": {
+      "hpMax": 60
+    },
+    "minLevel": 3,
+    "allowedJobs": ["warrior"],
+    "combatStat": {
+      "physicalDefense": 10,
+      "attackRecoveryMs": -40
     }
   },
   "swift_boots": {
@@ -32,6 +64,44 @@
     },
     "requirement": {
       "agility": 8
+    },
+    "minLevel": 3,
+    "combatStat": {
+      "moveSpeed": 25,
+      "evasion": 3,
+      "attackActiveMs": -10
+    }
+  },
+  "silver_ring": {
+    "id": "silver_ring",
+    "name": "Silver Ring",
+    "slot": "ring",
+    "stat": {
+      "luck": 4
+    },
+    "requirement": {
+      "luck": 4
+    },
+    "minLevel": 2,
+    "combatStat": {
+      "critRate": 2
+    }
+  },
+  "gold_ring": {
+    "id": "gold_ring",
+    "name": "Gold Ring",
+    "slot": "ring",
+    "stat": {
+      "intelligence": 3
+    },
+    "requirement": {
+      "intelligence": 3
+    },
+    "minLevel": 2,
+    "combatStat": {
+      "magicAttackMin": 4,
+      "magicAttackMax": 8,
+      "mpRecovery": 0.25
     }
   },
   "lucky_charm": {
@@ -43,7 +113,10 @@
     },
     "requirement": {
       "luck": 6
-    }
+    },
+    "minLevel": 4,
+    "exclusiveGroup": "trinket",
+    "incompatibleWith": ["traveler_cloak"]
   },
   "traveler_cloak": {
     "id": "traveler_cloak",
@@ -56,6 +129,17 @@
     "requirement": {
       "strength": 5,
       "agility": 4
+    },
+    "minLevel": 4,
+    "allowedGenders": ["male", "female"],
+    "exclusiveGroup": "trinket",
+    "incompatibleWith": ["lucky_charm"],
+    "combatStat": {
+      "physicalDefense": 5,
+      "magicDefense": 5,
+      "hpRecovery": 0.2
     }
   }
 }
+
+

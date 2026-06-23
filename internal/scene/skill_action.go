@@ -16,6 +16,7 @@ type PendingSkill struct {
 	CasterID  string
 	SkillID   string
 	Skill     combat.SkillConfig
+	Timing    combat.SkillTiming
 	ReadyAt   time.Time
 	CreatedAt time.Time
 }

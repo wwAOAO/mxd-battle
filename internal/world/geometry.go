@@ -20,15 +20,13 @@ type Portal struct {
 }
 
 type Platform struct {
-	ID     string  `json:"id"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Width  float64 `json:"width"`
-	Height float64 `json:"height"`
-	//开启平台侧边碰撞
-	SolidSides bool `json:"solidSides,omitempty"`
-	//开启平台头顶碰撞
-	SolidCeiling bool `json:"solidCeiling,omitempty"`
+	ID           string  `json:"id"`
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	Width        float64 `json:"width"`
+	Height       float64 `json:"height"`
+	SolidSides   bool    `json:"solidSides,omitempty"`
+	SolidCeiling bool    `json:"solidCeiling,omitempty"`
 }
 
 type Wall struct {
@@ -39,10 +37,20 @@ type Wall struct {
 	Height float64 `json:"height"`
 }
 
+type Ladder struct {
+	ID         string  `json:"id"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	Width      float64 `json:"width"`
+	Height     float64 `json:"height"`
+	ClimbSpeed float64 `json:"climbSpeed,omitempty"`
+}
+
 type Polygon struct {
 	ID     string  `json:"id"`
 	Points []Point `json:"points"`
 }
+
 type Terrain struct {
 	ID     string  `json:"id"`
 	X1     float64 `json:"x1,omitempty"`
@@ -109,6 +117,7 @@ func segmentYAt(a Point, b Point, x float64) (float64, bool) {
 	t := (x - a.X) / (b.X - a.X)
 	return a.Y + (b.Y-a.Y)*t, true
 }
+
 func Clamp(value float64, min float64, max float64) float64 {
 	if value < min {
 		return min
@@ -243,4 +252,11 @@ func segmentsIntersect(a Point, b Point, c Point, d Point) bool {
 
 func orientation(a Point, b Point, c Point) bool {
 	return (c.Y-a.Y)*(b.X-a.X) > (b.Y-a.Y)*(c.X-a.X)
+}
+
+func min(a float64, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }

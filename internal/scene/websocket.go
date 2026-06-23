@@ -37,6 +37,7 @@ type RoleSnapshot struct {
 	Level     int32
 	Exp       string
 	JobCode   string
+	Gender    string
 	Stat      PlayerStatBundle
 	MapID     int32
 	X         float64
@@ -44,13 +45,15 @@ type RoleSnapshot struct {
 }
 
 type moveMessage struct {
-	Type         string     `json:"type"`
-	X            float64    `json:"x"`
-	Y            float64    `json:"y"`
-	InputX       float64    `json:"inputX"`
-	Stat         PlayerStat `json:"stat"`
-	SkillID      string     `json:"skillId"`
-	EquipmentIDs []string   `json:"equipmentIds"`
+	Type             string            `json:"type"`
+	X                float64           `json:"x"`
+	Y                float64           `json:"y"`
+	InputX           float64           `json:"inputX"`
+	InputY           float64           `json:"inputY"`
+	Stat             PlayerStat        `json:"stat"`
+	SkillID          string            `json:"skillId"`
+	EquipmentIDs     []string          `json:"equipmentIds"`
+	EquipmentsBySlot map[string]string `json:"equipmentsBySlot"`
 }
 
 type websocketClient struct {
@@ -114,6 +117,7 @@ func (h *Handler) websocket(w http.ResponseWriter, r *http.Request) {
 	accountID := r.URL.Query().Get("account")
 	roleID := r.URL.Query().Get("role")
 	jobCode := r.URL.Query().Get("job")
+	gender := r.URL.Query().Get("gender")
 	name := r.URL.Query().Get("name")
 	if roomID == "" {
 		roomID = h.hub.DefaultRoom()
@@ -134,6 +138,9 @@ func (h *Handler) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		if jobCode == "" {
 			jobCode = role.JobCode
+		}
+		if gender == "" {
+			gender = role.Gender
 		}
 	}
 
@@ -159,6 +166,7 @@ func (h *Handler) websocket(w http.ResponseWriter, r *http.Request) {
 		Level:   role.Level,
 		Exp:     role.Exp,
 		JobCode: jobCode,
+		Gender:  gender,
 		Stat:    role.Stat,
 		X:       role.X,
 		Y:       role.Y,
@@ -273,7 +281,7 @@ func (c *websocketClient) readLoop(hub *Hub) {
 				continue
 			}
 			if msg.Type == "input" {
-				_, _ = hub.SetInput(c.playerID, msg.InputX)
+				_, _ = hub.SetInput(c.playerID, msg.InputX, msg.InputY)
 				continue
 			}
 			if msg.Type == "stat" {
@@ -293,13 +301,18 @@ func (c *websocketClient) readLoop(hub *Hub) {
 				continue
 			}
 			if msg.Type == "equipment" {
-				player, ok := hub.SetEquipment(c.playerID, msg.EquipmentIDs)
+				equipmentIDs := msg.EquipmentIDs
+				if len(msg.EquipmentsBySlot) > 0 {
+					equipmentIDs = orderedEquipmentIDsFromSlots(msg.EquipmentsBySlot)
+				}
+				player, selection, ok := hub.SetEquipment(c.playerID, equipmentIDs)
 				if ok {
 					c.writeEvent(ServerEvent{
-						Type:      "player_stat_updated",
-						Room:      player.Room,
-						Player:    &player,
-						CreatedAt: time.Now().UTC(),
+						Type:        "player_stat_updated",
+						Room:        player.Room,
+						Player:      &player,
+						EquipResult: &selection,
+						CreatedAt:   time.Now().UTC(),
 					})
 				}
 				continue
@@ -461,6 +474,33 @@ func readFrame(reader *bufio.Reader) ([]byte, byte, error) {
 		}
 	}
 	return payload, opcode, nil
+}
+
+func orderedEquipmentIDsFromSlots(equipmentsBySlot map[string]string) []string {
+	order := []string{"weapon_main", "weapon_sub", "ring1", "ring2", "armor", "shoes", "accessory", "misc"}
+	ids := make([]string, 0, len(equipmentsBySlot))
+	seen := make(map[string]struct{})
+	for _, slot := range order {
+		if id := strings.TrimSpace(equipmentsBySlot[slot]); id != "" {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range equipmentsBySlot {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, value any) {

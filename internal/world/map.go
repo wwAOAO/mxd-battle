@@ -23,6 +23,7 @@ type MapConfig struct {
 	Polygons     []Polygon  `json:"polygons,omitempty"`
 	Platforms    []Platform `json:"platforms"`
 	Walls        []Wall     `json:"walls"`
+	Ladders      []Ladder   `json:"ladders,omitempty"`
 	Portals      []Portal   `json:"portals"`
 }
 
@@ -123,6 +124,7 @@ func cloneRoomMaps(source map[string]MapConfig) map[string]MapConfig {
 		mapDef.Polygons = clonePolygons(mapDef.Polygons)
 		mapDef.Platforms = slices.Clone(mapDef.Platforms)
 		mapDef.Walls = slices.Clone(mapDef.Walls)
+		mapDef.Ladders = slices.Clone(mapDef.Ladders)
 		mapDef.Portals = slices.Clone(mapDef.Portals)
 		cloned[roomID] = mapDef
 	}

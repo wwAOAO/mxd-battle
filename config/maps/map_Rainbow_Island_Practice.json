@@ -62,13 +62,13 @@
       "id": "platform_7",
       "x": 3,
       "y": 1195,
-      "width": 600,
-      "height": 297
+      "width": 624,
+      "height": 300
     },
     {
       "id": "platform_8",
-      "x": 79,
-      "y": 901,
+      "x": 83,
+      "y": 199,
       "width": 260,
       "height": 40
     },
@@ -76,6 +76,62 @@
       "id": "platform_9",
       "x": 494,
       "y": 722,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_10",
+      "x": 491,
+      "y": 379,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_11",
+      "x": 879,
+      "y": 551,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_12",
+      "x": 1298,
+      "y": 389,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_13",
+      "x": 1248,
+      "y": 681,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_14",
+      "x": 1589,
+      "y": 583,
+      "width": 353,
+      "height": 86
+    },
+    {
+      "id": "platform_15",
+      "x": 2016,
+      "y": 560,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_16",
+      "x": 2092,
+      "y": 786,
+      "width": 260,
+      "height": 40
+    },
+    {
+      "id": "platform_17",
+      "x": 1668,
+      "y": 107,
       "width": 260,
       "height": 40
     }
@@ -87,6 +143,40 @@
       "y": 1220,
       "width": 80,
       "height": 280
+    }
+  ],
+  "ladders": [
+    {
+      "id": "ladder_1",
+      "x": 1210,
+      "y": 1284,
+      "width": 36,
+      "height": 216,
+      "climbSpeed": 240
+    },
+    {
+      "id": "ladder_2",
+      "x": 190,
+      "y": 199,
+      "width": 43,
+      "height": 1002,
+      "climbSpeed": 240
+    },
+    {
+      "id": "ladder_3",
+      "x": 602,
+      "y": 381,
+      "width": 41,
+      "height": 339,
+      "climbSpeed": 240
+    },
+    {
+      "id": "ladder_4",
+      "x": 1786,
+      "y": 108,
+      "width": 36,
+      "height": 473,
+      "climbSpeed": 240
     }
   ],
   "portals": [

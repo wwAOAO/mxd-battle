@@ -366,6 +366,7 @@
             <button id="addPolygon">Polygon</button>
             <button id="addPlatform">Platform</button>
             <button id="addWall">Wall</button>
+            <button id="addLadder">Ladder</button>
             <button id="addPortal">Portal</button>
             <button id="copyObject" class="secondary">Copy</button>
             <button id="deleteObject" class="danger">Delete</button>
@@ -425,6 +426,7 @@
         polygons: [],
         platforms: [],
         walls: [],
+        ladders: [],
         portals: [],
       };
 
@@ -486,6 +488,7 @@
           ...map.polygons.map((item) => ({ type: "polygon", item })),
           ...map.platforms.map((item) => ({ type: "platform", item })),
           ...map.walls.map((item) => ({ type: "wall", item })),
+          ...map.ladders.map((item) => ({ type: "ladder", item })),
           ...map.portals.map((item) => ({ type: "portal", item })),
         ];
       }
@@ -641,6 +644,19 @@
         selectObject("wall", item);
       }
 
+      function addLadder() {
+        const item = {
+          id: makeId("ladder", map.ladders),
+          x: 360,
+          y: map.groundY - 240,
+          width: 36,
+          height: 240,
+          climbSpeed: 240,
+        };
+        map.ladders.push(item);
+        selectObject("ladder", item);
+      }
+
       function addPortal() {
         const item = {
           id: makeId("portal", map.portals),
@@ -673,7 +689,9 @@
                 ? map.platforms
                 : selected.type === "wall"
                   ? map.walls
-                  : map.portals;
+                  : selected.type === "ladder"
+                    ? map.ladders
+                    : map.portals;
         const index = list.indexOf(selected.item);
         if (index >= 0) list.splice(index, 1);
         selected = null;
@@ -704,7 +722,9 @@
                 ? map.platforms
                 : selected.type === "wall"
                   ? map.walls
-                  : map.portals;
+                  : selected.type === "ladder"
+                    ? map.ladders
+                    : map.portals;
         clone.id = makeId(selected.type, list);
         offsetObject(selected.type, clone, 40, 40);
         list.push(clone);
@@ -821,6 +841,10 @@
           addCheckbox(editor, "Solid ceiling", selected.item, "solidCeiling");
         }
 
+        if (selected.type === "ladder") {
+          addNumberRow(editor, [["Climb Speed", selected.item, "climbSpeed"]]);
+        }
+
         if (selected.type === "portal") {
           addTextInput(editor, "Target Room ID", selected.item, "targetRoomId");
           addNumberRow(editor, [
@@ -903,6 +927,7 @@
             : [],
           platforms: Array.isArray(nextMap.platforms) ? nextMap.platforms : [],
           walls: Array.isArray(nextMap.walls) ? nextMap.walls : [],
+          ladders: Array.isArray(nextMap.ladders) ? nextMap.ladders : [],
           portals: Array.isArray(nextMap.portals) ? nextMap.portals : [],
         };
       }
@@ -1033,6 +1058,9 @@
         for (const wall of map.walls) {
           drawRect(wall, "#5c6572", "#303743");
         }
+        for (const ladder of map.ladders) {
+          drawLadder(ladder);
+        }
         for (const portal of map.portals) {
           drawRect(portal.area, "rgba(210, 58, 76, 0.22)", "#d23a4c");
         }
@@ -1129,6 +1157,25 @@
         ctx.lineWidth = 2;
         ctx.stroke();
         for (const point of points) drawHandle(point, "#303743");
+      }
+
+      function drawLadder(ladder) {
+        drawRect(ladder, "rgba(194, 120, 61, 0.18)", "#9a5d23");
+        const view = viewport();
+        const x = view.offsetX + ladder.x * view.scale;
+        const y = view.offsetY + ladder.y * view.scale;
+        const width = ladder.width * view.scale;
+        const height = ladder.height * view.scale;
+        const rungCount = Math.max(2, Math.floor(ladder.height / 42));
+        ctx.strokeStyle = "#9a5d23";
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= rungCount; i++) {
+          const rungY = y + (height * i) / rungCount;
+          ctx.beginPath();
+          ctx.moveTo(x, rungY);
+          ctx.lineTo(x + width, rungY);
+          ctx.stroke();
+        }
       }
 
       function drawHandle(point, color) {
@@ -1414,6 +1461,7 @@
       $("addPolygon").addEventListener("click", addPolygon);
       $("addPlatform").addEventListener("click", addPlatform);
       $("addWall").addEventListener("click", addWall);
+      $("addLadder").addEventListener("click", addLadder);
       $("addPortal").addEventListener("click", addPortal);
       $("copyObject").addEventListener("click", copySelected);
       $("deleteObject").addEventListener("click", deleteSelected);

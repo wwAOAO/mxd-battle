@@ -91,6 +91,7 @@ type SnapshotStat struct {
 	CritDamage        int32   `json:"critDamage"`
 	HPRecovery        float64 `json:"hpRecovery"`
 	MPRecovery        float64 `json:"mpRecovery"`
+	CastSpeed         int32   `json:"castSpeed"`
 	AttackStartupMS   int32   `json:"attackStartupMs"`
 	AttackActiveMS    int32   `json:"attackActiveMs"`
 	AttackRecoveryMS  int32   `json:"attackRecoveryMs"`
@@ -262,6 +263,7 @@ func calculateAllocatedFloatStat(stat BaseStat, percent StatPercent) float64 {
 		float64(stat.Agility)*percent.Agility/100 +
 		float64(stat.Luck)*percent.Luck/100
 }
+
 func LoadJobStatConfigs(path string) (JobStatConfigs, error) {
 	payload, err := os.ReadFile(path)
 	if err != nil {

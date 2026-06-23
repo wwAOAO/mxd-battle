@@ -1,6 +1,7 @@
 {
     "Rainbow_Island": {
-        "practice": "maps/map_Rainbow_Island_Practice.json"
+        "practice": "maps/map_Rainbow_Island_Practice.json",
+        "mushroom_village": "maps/mushroom_village.json"
     },
     "Treasure_Island": {
         "city": "maps/map_Treasure_Island_city.json"
