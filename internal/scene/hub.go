@@ -96,6 +96,7 @@ func NewHubWithJobs(logger *slog.Logger, publisher EventPublisher, maps map[stri
 }
 
 func NewHubWithJobsAndEquipment(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs, skillConfigs ...combat.SkillConfigs) (*Hub, error) {
+	maps = world.NormalizeRoomMaps(maps)
 	if err := world.ValidateRoomMaps(maps); err != nil {
 		return nil, err
 	}

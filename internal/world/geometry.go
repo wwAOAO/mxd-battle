@@ -30,11 +30,13 @@ type Platform struct {
 }
 
 type Wall struct {
-	ID     string  `json:"id"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Width  float64 `json:"width"`
-	Height float64 `json:"height"`
+	ID           string  `json:"id"`
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	Width        float64 `json:"width"`
+	Height       float64 `json:"height"`
+	SolidSides   *bool   `json:"solidSides,omitempty"`
+	SolidCeiling *bool   `json:"solidCeiling,omitempty"`
 }
 
 type Ladder struct {
@@ -52,12 +54,42 @@ type Polygon struct {
 }
 
 type Terrain struct {
-	ID     string  `json:"id"`
-	X1     float64 `json:"x1,omitempty"`
-	Y1     float64 `json:"y1,omitempty"`
-	X2     float64 `json:"x2,omitempty"`
-	Y2     float64 `json:"y2,omitempty"`
-	Points []Point `json:"points,omitempty"`
+	ID           string  `json:"id"`
+	X1           float64 `json:"x1,omitempty"`
+	Y1           float64 `json:"y1,omitempty"`
+	X2           float64 `json:"x2,omitempty"`
+	Y2           float64 `json:"y2,omitempty"`
+	Points       []Point `json:"points,omitempty"`
+	SolidSides   *bool   `json:"solidSides,omitempty"`
+	SolidCeiling *bool   `json:"solidCeiling,omitempty"`
+}
+
+func BoolPtr(value bool) *bool {
+	return &value
+}
+
+func TerrainHasSolidSides(terrain Terrain) bool {
+	return terrain.SolidSides == nil || *terrain.SolidSides
+}
+
+func TerrainHasSolidCeiling(terrain Terrain) bool {
+	return terrain.SolidCeiling != nil && *terrain.SolidCeiling
+}
+
+func PlatformHasSolidSides(platform Platform) bool {
+	return platform.SolidSides
+}
+
+func PlatformHasSolidCeiling(platform Platform) bool {
+	return platform.SolidCeiling
+}
+
+func WallHasSolidSides(wall Wall) bool {
+	return wall.SolidSides == nil || *wall.SolidSides
+}
+
+func WallHasSolidCeiling(wall Wall) bool {
+	return wall.SolidCeiling == nil || *wall.SolidCeiling
 }
 
 func ContainsPoint(rect Rect, point Point) bool {

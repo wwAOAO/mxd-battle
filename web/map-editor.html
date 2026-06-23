@@ -524,13 +524,16 @@
                 { x: Number(terrain.x1) || 0, y: Number(terrain.y1) || 0 },
                 { x: Number(terrain.x2) || 0, y: Number(terrain.y2) || 0 },
               ];
-        return {
+        const normalized = {
           id: terrain.id || makeId("terrain", map.terrain),
           points: points.map((point) => ({
             x: Number(point.x) || 0,
             y: Number(point.y) || 0,
           })),
         };
+        if (terrain.solidSides === false) normalized.solidSides = false;
+        if (terrain.solidCeiling === true) normalized.solidCeiling = true;
+        return normalized;
       }
 
       function terrainPoints(terrain) {
@@ -564,6 +567,32 @@
               }))
             : [],
         };
+      }
+
+      function normalizePlatform(platform) {
+        const normalized = {
+          id: platform.id || makeId("platform", map.platforms),
+          x: Number(platform.x) || 0,
+          y: Number(platform.y) || 0,
+          width: Number(platform.width) || 0,
+          height: Number(platform.height) || 0,
+        };
+        if (platform.solidSides === true) normalized.solidSides = true;
+        if (platform.solidCeiling === true) normalized.solidCeiling = true;
+        return normalized;
+      }
+
+      function normalizeWall(wall) {
+        const normalized = {
+          id: wall.id || makeId("wall", map.walls),
+          x: Number(wall.x) || 0,
+          y: Number(wall.y) || 0,
+          width: Number(wall.width) || 0,
+          height: Number(wall.height) || 0,
+        };
+        if (wall.solidSides === false) normalized.solidSides = false;
+        if (wall.solidCeiling === false) normalized.solidCeiling = false;
+        return normalized;
       }
 
       function polygonPoints(polygon) {
@@ -836,9 +865,19 @@
           ["Height", rect, "height"],
         ]);
 
+        if (selected.type === "terrain") {
+          addCheckbox(editor, "Solid sides", selected.item, "solidSides", true);
+          addCheckbox(editor, "Solid ceiling", selected.item, "solidCeiling", false);
+        }
+
         if (selected.type === "platform") {
-          addCheckbox(editor, "Solid sides", selected.item, "solidSides");
-          addCheckbox(editor, "Solid ceiling", selected.item, "solidCeiling");
+          addCheckbox(editor, "Solid sides", selected.item, "solidSides", false);
+          addCheckbox(editor, "Solid ceiling", selected.item, "solidCeiling", false);
+        }
+
+        if (selected.type === "wall") {
+          addCheckbox(editor, "Solid sides", selected.item, "solidSides", true);
+          addCheckbox(editor, "Solid ceiling", selected.item, "solidCeiling", true);
         }
 
         if (selected.type === "ladder") {
@@ -886,15 +925,16 @@
         parent.appendChild(row);
       }
 
-      function addCheckbox(parent, labelText, object, key) {
+      function addCheckbox(parent, labelText, object, key, defaultValue = false) {
         const label = document.createElement("label");
         label.textContent = labelText;
         const input = document.createElement("input");
         input.type = "checkbox";
-        input.checked = Boolean(object[key]);
+        input.checked =
+          key in object ? Boolean(object[key]) : Boolean(defaultValue);
         input.addEventListener("change", () => {
-          if (input.checked) object[key] = true;
-          else delete object[key];
+          if (input.checked === Boolean(defaultValue)) delete object[key];
+          else object[key] = input.checked;
           refreshAfterObjectEdit();
         });
         label.appendChild(input);
@@ -925,8 +965,12 @@
           polygons: Array.isArray(nextMap.polygons)
             ? nextMap.polygons.map(normalizePolygon)
             : [],
-          platforms: Array.isArray(nextMap.platforms) ? nextMap.platforms : [],
-          walls: Array.isArray(nextMap.walls) ? nextMap.walls : [],
+          platforms: Array.isArray(nextMap.platforms)
+            ? nextMap.platforms.map(normalizePlatform)
+            : [],
+          walls: Array.isArray(nextMap.walls)
+            ? nextMap.walls.map(normalizeWall)
+            : [],
           ladders: Array.isArray(nextMap.ladders) ? nextMap.ladders : [],
           portals: Array.isArray(nextMap.portals) ? nextMap.portals : [],
         };
@@ -1047,16 +1091,21 @@
 
         for (const terrain of map.terrain) {
           drawTerrain(terrain);
+          if (terrain.solidSides !== false || terrain.solidCeiling === true)
+            drawCollisionFlags({ type: "terrain", item: terrain });
         }
         for (const polygon of map.polygons) {
           drawPolygon(polygon);
         }
         for (const platform of map.platforms) {
           drawRect(platform, "#8b9468", "#59643e");
-          if (platform.solidSides || platform.solidCeiling) drawFlags(platform);
+          if (platform.solidSides || platform.solidCeiling)
+            drawCollisionFlags({ type: "platform", item: platform });
         }
         for (const wall of map.walls) {
           drawRect(wall, "#5c6572", "#303743");
+          if (wall.solidSides !== false || wall.solidCeiling !== false)
+            drawCollisionFlags({ type: "wall", item: wall });
         }
         for (const ladder of map.ladders) {
           drawLadder(ladder);
@@ -1207,15 +1256,22 @@
         for (const point of points) drawHandle(point, "#f4b400");
       }
 
-      function drawFlags(platform) {
-        const p = worldToScreen({ x: platform.x + 6, y: platform.y + 16 });
+      function drawCollisionFlags(entry) {
+        const rect = objectRect(entry);
+        const p = worldToScreen({ x: rect.x + 6, y: rect.y + 18 });
+        const solidSides =
+          entry.type === "terrain" || entry.type === "wall"
+            ? entry.item.solidSides !== false
+            : Boolean(entry.item.solidSides);
+        const solidCeiling =
+          entry.type === "wall"
+            ? entry.item.solidCeiling !== false
+            : Boolean(entry.item.solidCeiling);
+        const text = `${solidSides ? "S" : ""}${solidCeiling ? "C" : ""}`;
+        if (!text) return;
         ctx.fillStyle = "#172033";
         ctx.font = `${12 * devicePixelRatio}px system-ui`;
-        ctx.fillText(
-          `${platform.solidSides ? "S" : ""}${platform.solidCeiling ? "C" : ""}`,
-          p.x,
-          p.y,
-        );
+        ctx.fillText(text, p.x, p.y);
       }
 
       function hitTest(point) {

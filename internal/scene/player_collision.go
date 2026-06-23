@@ -1,6 +1,7 @@
 package scene
 
 import (
+	"math"
 	"time"
 
 	"mxd-battle/internal/world"
@@ -16,6 +17,9 @@ func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) 
 	nextTop := PlayerTop(next)
 	nextBottom := next.Y
 	for _, wall := range mapDef.Walls {
+		if !world.WallHasSolidSides(wall) {
+			continue
+		}
 		next.X = resolveSolidSideCollision(
 			world.Rect{X: wall.X, Y: wall.Y, Width: wall.Width, Height: wall.Height},
 			previous,
@@ -24,8 +28,16 @@ func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) 
 			nextBottom,
 		)
 	}
+	for _, terrain := range mapDef.Terrain {
+		if !world.TerrainHasSolidSides(terrain) {
+			continue
+		}
+		for _, rect := range terrainSideRects(terrain) {
+			next.X = resolveSolidSideCollision(rect, previous, next, nextTop, nextBottom)
+		}
+	}
 	for _, platform := range mapDef.Platforms {
-		if !platform.SolidSides {
+		if !world.PlatformHasSolidSides(platform) {
 			continue
 		}
 		next.X = resolveSolidSideCollision(
@@ -41,6 +53,30 @@ func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) 
 	}
 
 	return next.X
+}
+
+func terrainSideRects(terrain world.Terrain) []world.Rect {
+	points := world.TerrainPoints(terrain)
+	if len(points) < 2 {
+		return nil
+	}
+	rects := make([]world.Rect, 0, len(points)-1)
+	for i := 0; i < len(points)-1; i++ {
+		a := points[i]
+		b := points[i+1]
+		if math.Abs(a.X-b.X) > wallSkin {
+			continue
+		}
+		top := math.Min(a.Y, b.Y)
+		bottom := math.Max(a.Y, b.Y)
+		rects = append(rects, world.Rect{
+			X:      a.X - wallSkin,
+			Y:      top,
+			Width:  wallSkin * 2,
+			Height: bottom - top,
+		})
+	}
+	return rects
 }
 
 func resolveSolidSideCollision(rect world.Rect, previous Player, next Player, nextTop float64, nextBottom float64) float64 {
@@ -97,6 +133,9 @@ func resolveCeilingCollision(mapDef world.MapConfig, previous Player, next Playe
 	previousTop := PlayerTop(previous)
 	nextTop := PlayerTop(next)
 	for _, wall := range mapDef.Walls {
+		if !world.WallHasSolidCeiling(wall) {
+			continue
+		}
 		next = resolveSolidCeilingCollision(
 			world.Rect{X: wall.X, Y: wall.Y, Width: wall.Width, Height: wall.Height},
 			previousTop,
@@ -105,7 +144,7 @@ func resolveCeilingCollision(mapDef world.MapConfig, previous Player, next Playe
 		)
 	}
 	for _, platform := range mapDef.Platforms {
-		if !platform.SolidCeiling {
+		if !world.PlatformHasSolidCeiling(platform) {
 			continue
 		}
 		next = resolveSolidCeilingCollision(

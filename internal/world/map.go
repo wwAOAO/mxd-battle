@@ -64,6 +64,7 @@ func LoadMaps(path string) (map[string]MapConfig, error) {
 			maps[fullRoomID] = mapDef
 		}
 	}
+	maps = NormalizeRoomMaps(maps)
 	if err := ValidateRoomMaps(maps); err != nil {
 		return nil, err
 	}
@@ -80,7 +81,53 @@ func LoadMap(path string) (MapConfig, error) {
 	if err := json.Unmarshal(payload, &mapDef); err != nil {
 		return MapConfig{}, fmt.Errorf("decode map file: %w", err)
 	}
-	return mapDef, nil
+	return NormalizeMapConfig(mapDef), nil
+}
+
+func NormalizeRoomMaps(source map[string]MapConfig) map[string]MapConfig {
+	normalized := make(map[string]MapConfig, len(source))
+	for roomID, mapDef := range source {
+		normalized[roomID] = NormalizeMapConfig(mapDef)
+	}
+	return normalized
+}
+
+func NormalizeMapConfig(mapDef MapConfig) MapConfig {
+	mapDef.Terrain = normalizeTerrainList(mapDef.Terrain)
+	mapDef.Platforms = normalizePlatformList(mapDef.Platforms)
+	mapDef.Walls = normalizeWallList(mapDef.Walls)
+	return mapDef
+}
+
+func normalizeTerrainList(source []Terrain) []Terrain {
+	normalized := slices.Clone(source)
+	for i := range normalized {
+		if normalized[i].SolidSides == nil {
+			normalized[i].SolidSides = BoolPtr(true)
+		}
+		if normalized[i].SolidCeiling == nil {
+			normalized[i].SolidCeiling = BoolPtr(false)
+		}
+		normalized[i].Points = slices.Clone(normalized[i].Points)
+	}
+	return normalized
+}
+
+func normalizePlatformList(source []Platform) []Platform {
+	return slices.Clone(source)
+}
+
+func normalizeWallList(source []Wall) []Wall {
+	normalized := slices.Clone(source)
+	for i := range normalized {
+		if normalized[i].SolidSides == nil {
+			normalized[i].SolidSides = BoolPtr(true)
+		}
+		if normalized[i].SolidCeiling == nil {
+			normalized[i].SolidCeiling = BoolPtr(true)
+		}
+	}
+	return normalized
 }
 
 func ValidateRoomMaps(maps map[string]MapConfig) error {
@@ -105,6 +152,14 @@ func cloneTerrain(source []Terrain) []Terrain {
 	cloned := slices.Clone(source)
 	for i := range cloned {
 		cloned[i].Points = slices.Clone(cloned[i].Points)
+		if cloned[i].SolidSides != nil {
+			value := *cloned[i].SolidSides
+			cloned[i].SolidSides = BoolPtr(value)
+		}
+		if cloned[i].SolidCeiling != nil {
+			value := *cloned[i].SolidCeiling
+			cloned[i].SolidCeiling = BoolPtr(value)
+		}
 	}
 	return cloned
 }
@@ -117,13 +172,29 @@ func clonePolygons(source []Polygon) []Polygon {
 	return cloned
 }
 
+func cloneWalls(source []Wall) []Wall {
+	cloned := slices.Clone(source)
+	for i := range cloned {
+		if cloned[i].SolidSides != nil {
+			value := *cloned[i].SolidSides
+			cloned[i].SolidSides = BoolPtr(value)
+		}
+		if cloned[i].SolidCeiling != nil {
+			value := *cloned[i].SolidCeiling
+			cloned[i].SolidCeiling = BoolPtr(value)
+		}
+	}
+	return cloned
+}
+
 func cloneRoomMaps(source map[string]MapConfig) map[string]MapConfig {
 	cloned := make(map[string]MapConfig, len(source))
 	for roomID, mapDef := range source {
+		mapDef = NormalizeMapConfig(mapDef)
 		mapDef.Terrain = cloneTerrain(mapDef.Terrain)
 		mapDef.Polygons = clonePolygons(mapDef.Polygons)
 		mapDef.Platforms = slices.Clone(mapDef.Platforms)
-		mapDef.Walls = slices.Clone(mapDef.Walls)
+		mapDef.Walls = cloneWalls(mapDef.Walls)
 		mapDef.Ladders = slices.Clone(mapDef.Ladders)
 		mapDef.Portals = slices.Clone(mapDef.Portals)
 		cloned[roomID] = mapDef

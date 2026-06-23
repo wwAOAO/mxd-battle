@@ -1504,6 +1504,86 @@ func TestHubLandsOnMultiPointTerrain(t *testing.T) {
 		t.Fatalf("expected player to land on multi-point terrain at y=1425, got %+v", player)
 	}
 }
+func TestHubBlocksHorizontalMovementThroughTerrainSideByDefault(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_side_default",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "step",
+					Points: []world.Point{
+						{X: 0, Y: 1500},
+						{X: 500, Y: 1500},
+						{X: 500, Y: 1300},
+						{X: 1000, Y: 1300},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "terrain-left", X: 460, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join terrain-left: %v", err)
+	}
+
+	player, ok := hub.Move("terrain-left", 560, 1500)
+	if !ok {
+		t.Fatal("expected terrain-left move to succeed")
+	}
+	if player.X >= 500-DefaultPlayerWidth/2 {
+		t.Fatalf("expected terrain side to block right movement, got %+v", player)
+	}
+}
+
+func TestHubAllowsHorizontalMovementThroughTerrainSideWhenDisabled(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_side_disabled",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID:         "step",
+					SolidSides: world.BoolPtr(false),
+					Points: []world.Point{
+						{X: 0, Y: 1500},
+						{X: 500, Y: 1500},
+						{X: 500, Y: 1300},
+						{X: 1000, Y: 1300},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "terrain-free", X: 460, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join terrain-free: %v", err)
+	}
+
+	player, ok := hub.Move("terrain-free", 560, 1500)
+	if !ok {
+		t.Fatal("expected terrain-free move to succeed")
+	}
+	if player.X != 560 {
+		t.Fatalf("expected terrain with solidSides=false to allow side movement, got %+v", player)
+	}
+}
 func TestHubBlocksHorizontalMovementThroughWall(t *testing.T) {
 	hub := newTestHub(t)
 	if _, err := hub.Join(RoomX, Player{ID: "blocked-left", X: 1460, Y: 1500}, &recordingPeer{}); err != nil {
