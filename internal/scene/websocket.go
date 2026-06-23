@@ -13,6 +13,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +77,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.health)
 	mux.HandleFunc("/job-stats", h.jobStats)
 	mux.HandleFunc("/equipment-stats", h.equipmentStats)
+	mux.HandleFunc("/map-files", h.mapFiles)
+	mux.HandleFunc("/map-files/", h.mapFile)
 	mux.HandleFunc("/rooms", h.rooms)
 	mux.HandleFunc("/rooms/", h.roomState)
 	mux.HandleFunc("/ws", h.websocket)
@@ -92,6 +97,69 @@ func (h *Handler) jobStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.JobStatConfigs())
 }
 
+type mapFileInfo struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+func (h *Handler) mapFiles(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/map-files" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "map file not found"})
+		return
+	}
+
+	files := make([]mapFileInfo, 0)
+	root := filepath.Join("config", "maps")
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".json" {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, mapFileInfo{
+			Name: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+			Path: filepath.ToSlash(rel),
+		})
+		return nil
+	}); err != nil {
+		h.logger.Warn("failed to list map files", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list map files"})
+		return
+	}
+	slices.SortFunc(files, func(a mapFileInfo, b mapFileInfo) int {
+		return strings.Compare(a.Path, b.Path)
+	})
+	writeJSON(w, http.StatusOK, map[string][]mapFileInfo{"maps": files})
+}
+
+func (h *Handler) mapFile(w http.ResponseWriter, r *http.Request) {
+	rel := strings.TrimPrefix(r.URL.Path, "/map-files/")
+	if rel == "" || strings.Contains(rel, "\\") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "map file path required"})
+		return
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if clean == "." || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) || filepath.Ext(clean) != ".json" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid map file path"})
+		return
+	}
+
+	path := filepath.Join("config", "maps", clean)
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "map file not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
+}
 func (h *Handler) equipmentStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.EquipmentConfigs())
 }

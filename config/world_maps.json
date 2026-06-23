@@ -1,7 +1,7 @@
 {
     "Rainbow_Island": {
         "dangerous_woods": "maps/rainbow_island/dangerous_woods.json",
-        "little_forest": "maps/rainbow_island/mushroom_village.json",
+        "little_forest": "maps/rainbow_island/little_forest.json",
         "snail_village": "maps/rainbow_island/snail_village.json",
         "snail_garden": "maps/rainbow_island/snail_garden.json",
         "rainbow_village": "maps/rainbow_island/rainbow_village.json",

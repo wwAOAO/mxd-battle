@@ -1,101 +1,91 @@
 {
-    "id": "Snail_Garden",
-    "name": "Snail Garden",
-    "width": 2400,
-    "height": 1500,
-    "groundY": 1500,
-    "gravity": 2600,
-    "jumpVelocity": -980,
-    "moveSpeed": 420,
-    "spawn": {
-        "x": 180,
-        "y": 1500
+  "id": "Snail_Garden",
+  "name": "Snail Garden",
+  "width": 2400,
+  "height": 1500,
+  "groundY": 1500,
+  "gravity": 2600,
+  "jumpVelocity": -980,
+  "moveSpeed": 420,
+  "spawn": {
+    "x": 180,
+    "y": 1500
+  },
+  "terrain": [
+    {
+      "id": "terrain_1",
+      "points": [
+        {
+          "x": -3,
+          "y": 1195
+        },
+        {
+          "x": 802,
+          "y": 1195
+        },
+        {
+          "x": 802,
+          "y": 1094
+        },
+        {
+          "x": 1006,
+          "y": 1094
+        },
+        {
+          "x": 1002,
+          "y": 991
+        },
+        {
+          "x": 2400,
+          "y": 998
+        }
+      ],
+      "solidSides": true,
+      "solidCeiling": false
+    }
+  ],
+  "polygons": [],
+  "platforms": [
+    {
+      "id": "platform_1",
+      "x": 735,
+      "y": 493,
+      "width": 249,
+      "height": 63
     },
-    "terrain": [
-        {
-            "id": "terrain_1",
-            "points": [
-                {
-                    "x": -3,
-                    "y": 1195
-                },
-                {
-                    "x": 807,
-                    "y": 1195
-                }
-            ]
-        },
-        {
-            "id": "terrain_2",
-            "points": [
-                {
-                    "x": 1001,
-                    "y": 998
-                },
-                {
-                    "x": 2403,
-                    "y": 1000
-                }
-            ]
-        }
-    ],
-    "polygons": [],
-    "platforms": [
-        {
-            "id": "platform_1",
-            "x": 735,
-            "y": 493,
-            "width": 249,
-            "height": 63
-        },
-        {
-            "id": "platform_2",
-            "x": 218,
-            "y": 982,
-            "width": 271,
-            "height": 53
-        }
-    ],
-    "walls": [
-        {
-            "id": "wall_1",
-            "x": 802,
-            "y": 1093,
-            "width": 100,
-            "height": 403
-        },
-        {
-            "id": "wall_2",
-            "x": 903,
-            "y": 991,
-            "width": 102,
-            "height": 513
-        }
-    ],
-    "ladders": [
-        {
-            "id": "ladder_1",
-            "x": 810,
-            "y": 498,
-            "width": 52,
-            "height": 589,
-            "climbSpeed": 240
-        }
-    ],
-    "portals": [
-        {
-            "id": "portal_1",
-            "targetRoomId": "Treasure_Island.city",
-            "area": {
-                "x": 2219,
-                "y": 840,
-                "width": 85,
-                "height": 155
-            },
-            "target": {
-                "x": 120,
-                "y": 1500
-            }
-        }
-    ]
+    {
+      "id": "platform_2",
+      "x": 218,
+      "y": 982,
+      "width": 271,
+      "height": 53
+    }
+  ],
+  "walls": [],
+  "ladders": [
+    {
+      "id": "ladder_1",
+      "x": 810,
+      "y": 498,
+      "width": 52,
+      "height": 589,
+      "climbSpeed": 240
+    }
+  ],
+  "portals": [
+    {
+      "id": "portal_1",
+      "targetRoomId": "Rainbow_Island.little_forest",
+      "area": {
+        "x": 2219,
+        "y": 840,
+        "width": 85,
+        "height": 155
+      },
+      "target": {
+        "x": 120,
+        "y": 1500
+      }
+    }
+  ]
 }

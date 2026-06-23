@@ -25,19 +25,19 @@
         },
         {
           "x": 793,
-          "y": 1103
+          "y": 1128
         },
         {
-          "x": 1598,
-          "y": 1101
+          "x": 1607,
+          "y": 1128
         },
         {
-          "x": 1600,
+          "x": 1602,
           "y": 1002
         },
         {
-          "x": 1800,
-          "y": 1000
+          "x": 1806,
+          "y": 1002
         },
         {
           "x": 1802,
@@ -47,7 +47,9 @@
           "x": 2405,
           "y": 899
         }
-      ]
+      ],
+      "solidSides": true,
+      "solidCeiling": false
     }
   ],
   "polygons": [],
@@ -104,7 +106,7 @@
   "portals": [
     {
       "id": "portal_1",
-      "targetRoomId": "Treasure_Island.city",
+      "targetRoomId": "Rainbow_Island.rainbow_village",
       "area": {
         "x": 2268,
         "y": 763,

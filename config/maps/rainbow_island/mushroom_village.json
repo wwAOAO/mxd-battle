@@ -20,14 +20,28 @@
           "y": 1303
         },
         {
-          "x": 408,
-          "y": 1303
+          "x": 1504,
+          "y": 1294
         },
         {
-          "x": 1497,
-          "y": 1307
+          "x": 1501,
+          "y": 1199
+        },
+        {
+          "x": 1701,
+          "y": 1199
+        },
+        {
+          "x": 1699,
+          "y": 1094
+        },
+        {
+          "x": 2403,
+          "y": 1099
         }
-      ]
+      ],
+      "solidSides": true,
+      "solidCeiling": false
     }
   ],
   "polygons": [],
@@ -70,20 +84,6 @@
   ],
   "walls": [
     {
-      "id": "wall_1",
-      "x": 1503,
-      "y": 1198,
-      "width": 80,
-      "height": 300
-    },
-    {
-      "id": "wall_2",
-      "x": 1580,
-      "y": 1095,
-      "width": 818,
-      "height": 405
-    },
-    {
       "id": "wall_3",
       "x": 532,
       "y": 673,
@@ -104,7 +104,7 @@
   "portals": [
     {
       "id": "portal_1",
-      "targetRoomId": "Treasure_Island.city",
+      "targetRoomId": "Rainbow_Island.snail_village",
       "area": {
         "x": 1963,
         "y": 975,

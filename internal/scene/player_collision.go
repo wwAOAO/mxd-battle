@@ -8,6 +8,8 @@ import (
 )
 
 const wallSkin = 0.001
+const maxWalkableTerrainStep = 48.0
+const maxWalkableTerrainSlope = 0.8
 
 func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) float64 {
 	if previous.X == next.X {
@@ -32,8 +34,8 @@ func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) 
 		if !world.TerrainHasSolidSides(terrain) {
 			continue
 		}
-		for _, rect := range terrainSideRects(terrain) {
-			next.X = resolveSolidSideCollision(rect, previous, next, nextTop, nextBottom)
+		for _, side := range terrainSideRects(terrain) {
+			next.X = resolveTerrainSideCollision(side, previous, next, nextTop, nextBottom)
 		}
 	}
 	for _, platform := range mapDef.Platforms {
@@ -55,30 +57,127 @@ func resolveWallCollision(mapDef world.MapConfig, previous Player, next Player) 
 	return next.X
 }
 
-func terrainSideRects(terrain world.Terrain) []world.Rect {
+type terrainSideRect struct {
+	rect     world.Rect
+	highSide int
+}
+
+func terrainSideRects(terrain world.Terrain) []terrainSideRect {
 	points := world.TerrainPoints(terrain)
 	if len(points) < 2 {
 		return nil
 	}
-	rects := make([]world.Rect, 0, len(points)-1)
+	rects := make([]terrainSideRect, 0, len(points)-1)
 	for i := 0; i < len(points)-1; i++ {
 		a := points[i]
 		b := points[i+1]
-		if math.Abs(a.X-b.X) > wallSkin {
-			continue
-		}
 		top := math.Min(a.Y, b.Y)
 		bottom := math.Max(a.Y, b.Y)
-		rects = append(rects, world.Rect{
-			X:      a.X - wallSkin,
-			Y:      top,
-			Width:  wallSkin * 2,
-			Height: bottom - top,
+		if math.Abs(a.X-b.X) > wallSkin {
+			if !isSteepTerrainStep(a, b) {
+				continue
+			}
+			rects = append(rects, terrainSideRect{
+				rect: world.Rect{
+					X:      lowerTerrainEntryX(a, b) - wallSkin,
+					Y:      top,
+					Width:  wallSkin * 2,
+					Height: bottom - top,
+				},
+				highSide: terrainHighSide(points, i),
+			})
+			continue
+		}
+		rects = append(rects, terrainSideRect{
+			rect: world.Rect{
+				X:      a.X - wallSkin,
+				Y:      top,
+				Width:  wallSkin * 2,
+				Height: bottom - top,
+			},
+			highSide: terrainHighSide(points, i),
 		})
 	}
 	return rects
 }
 
+func terrainHighSide(points []world.Point, index int) int {
+	a := points[index]
+	b := points[index+1]
+	if a.Y < b.Y {
+		return terrainEndpointSide(points, index, -1)
+	}
+	if b.Y < a.Y {
+		return terrainEndpointSide(points, index+1, 1)
+	}
+	return 0
+}
+
+func terrainEndpointSide(points []world.Point, index int, fallback int) int {
+	point := points[index]
+	if index > 0 && points[index-1].Y == point.Y {
+		return sideOf(points[index-1].X, point.X, fallback)
+	}
+	if index+1 < len(points) && points[index+1].Y == point.Y {
+		return sideOf(points[index+1].X, point.X, fallback)
+	}
+	return fallback
+}
+
+func sideOf(x float64, origin float64, fallback int) int {
+	if x < origin {
+		return -1
+	}
+	if x > origin {
+		return 1
+	}
+	return fallback
+}
+func isSteepTerrainStep(a world.Point, b world.Point) bool {
+	rise := math.Abs(a.Y - b.Y)
+	run := math.Abs(a.X - b.X)
+	if rise <= maxWalkableTerrainStep || run <= wallSkin {
+		return false
+	}
+	return rise/run > maxWalkableTerrainSlope
+}
+
+func lowerTerrainEntryX(a world.Point, b world.Point) float64 {
+	if a.Y > b.Y {
+		return a.X
+	}
+	return b.X
+}
+
+func resolveTerrainSideCollision(side terrainSideRect, previous Player, next Player, nextTop float64, nextBottom float64) float64 {
+	rect := side.rect
+	if nextBottom <= rect.Y || !world.OverlapsVertical(nextTop, nextBottom, rect) {
+		return next.X
+	}
+	rectLeft := rect.X
+	rectRight := rect.X + rect.Width
+	nextRight := PlayerRight(next)
+	nextLeft := PlayerLeft(next)
+	movingRight := previous.X <= rectLeft && nextRight >= rectLeft
+	movingLeft := previous.X >= rectRight && nextLeft <= rectRight
+
+	if movingRight {
+		if side.highSide < 0 || side.highSide > 0 && terrainSideStepOverY(previous, next) <= rect.Y+maxWalkableTerrainStep {
+			return next.X
+		}
+		return rectLeft - PlayerHalfWidth(next) - wallSkin
+	}
+	if movingLeft {
+		if side.highSide > 0 || side.highSide < 0 && terrainSideStepOverY(previous, next) <= rect.Y+maxWalkableTerrainStep {
+			return next.X
+		}
+		return rectRight + PlayerHalfWidth(next) + wallSkin
+	}
+	return next.X
+}
+func terrainSideStepOverY(previous Player, next Player) float64 {
+	return math.Min(previous.Y, next.Y)
+}
 func resolveSolidSideCollision(rect world.Rect, previous Player, next Player, nextTop float64, nextBottom float64) float64 {
 	if nextBottom <= rect.Y || !world.OverlapsVertical(nextTop, nextBottom, rect) {
 		return next.X
@@ -188,7 +287,7 @@ func resolvePolygonCeilingCollision(polygon world.Polygon, previousTop float64, 
 }
 
 func applyGround(mapDef world.MapConfig, player Player, previousY float64, now time.Time) Player {
-	landingY := terrainLandingY(mapDef, player.X)
+	landingY := terrainLandingY(mapDef, player)
 
 	if player.VY >= 0 {
 		for _, platform := range mapDef.Platforms {
@@ -228,15 +327,143 @@ func applyGround(mapDef world.MapConfig, player Player, previousY float64, now t
 	return player
 }
 
-func terrainLandingY(mapDef world.MapConfig, x float64) float64 {
+func terrainLandingY(mapDef world.MapConfig, player Player) float64 {
 	landingY := mapDef.GroundY
+	centerY := terrainYAt(mapDef, player.X, landingY)
+	if centerY < landingY {
+		landingY = centerY
+	}
+
+	for _, x := range []float64{PlayerLeft(player), PlayerRight(player)} {
+		if terrainSideBetween(mapDef, player.X, x, player.Y) {
+			continue
+		}
+		y := terrainEdgeYAt(mapDef, x, player.Y, mapDef.GroundY)
+		if centerY-y <= maxWalkableTerrainStep {
+			continue
+		}
+		if y < landingY {
+			landingY = y
+		}
+	}
+	return landingY
+}
+
+func terrainSideBetween(mapDef world.MapConfig, fromX float64, toX float64, footY float64) bool {
+	minX := math.Min(fromX, toX)
+	maxX := math.Max(fromX, toX)
 	for _, terrain := range mapDef.Terrain {
-		y, ok := world.TerrainYAt(terrain, x)
+		if !world.TerrainHasSolidSides(terrain) {
+			continue
+		}
+		for _, side := range terrainSideRects(terrain) {
+			rect := side.rect
+			sideX := rect.X + rect.Width/2
+			if sideX <= minX || sideX >= maxX {
+				continue
+			}
+			if footY > rect.Y+maxWalkableTerrainStep && footY <= rect.Y+rect.Height+maxWalkableTerrainStep {
+				return true
+			}
+		}
+	}
+	return false
+}
+func terrainEdgeYAt(mapDef world.MapConfig, x float64, footY float64, fallback float64) float64 {
+	landingY := fallback
+	for _, terrain := range mapDef.Terrain {
+		y, ok := terrainSurfaceYAtForEdge(terrain, x, footY)
 		if ok && y < landingY {
 			landingY = y
 		}
 	}
 	return landingY
+}
+
+func terrainSurfaceYAtForEdge(terrain world.Terrain, x float64, footY float64) (float64, bool) {
+	points := world.TerrainPoints(terrain)
+	for i := 0; i < len(points)-1; i++ {
+		a := points[i]
+		b := points[i+1]
+		if math.Abs(a.X-b.X) <= wallSkin || isSteepTerrainStep(a, b) {
+			continue
+		}
+		minX := math.Min(a.X, b.X)
+		maxX := math.Max(a.X, b.X)
+		if x < minX || x > maxX || terrainSurfaceEndpointTouchesWall(points, i, x) {
+			continue
+		}
+		t := (x - a.X) / (b.X - a.X)
+		y := a.Y + (b.Y-a.Y)*t
+		if y < footY-maxWalkableTerrainStep && terrainSurfaceEndpointNearSolidSide(points, i, x) {
+			continue
+		}
+		return y, true
+	}
+	return 0, false
+}
+
+func terrainSurfaceEndpointNearSolidSide(points []world.Point, segmentIndex int, x float64) bool {
+	return math.Abs(x-points[segmentIndex].X) <= PlayerHalfWidth(Player{Width: DefaultPlayerWidth}) && terrainPointTouchesSolidSide(points, segmentIndex) ||
+		math.Abs(x-points[segmentIndex+1].X) <= PlayerHalfWidth(Player{Width: DefaultPlayerWidth}) && terrainPointTouchesSolidSide(points, segmentIndex+1)
+}
+
+func terrainPointTouchesSolidSide(points []world.Point, pointIndex int) bool {
+	if pointIndex > 0 && isTerrainSolidSideSegment(points[pointIndex-1], points[pointIndex]) {
+		return true
+	}
+	return pointIndex+1 < len(points) && isTerrainSolidSideSegment(points[pointIndex], points[pointIndex+1])
+}
+
+func isTerrainSolidSideSegment(a world.Point, b world.Point) bool {
+	return math.Abs(a.X-b.X) <= wallSkin || isSteepTerrainStep(a, b)
+}
+func terrainYAt(mapDef world.MapConfig, x float64, fallback float64) float64 {
+	landingY := fallback
+	for _, terrain := range mapDef.Terrain {
+		y, ok := terrainSurfaceYAt(terrain, x)
+		if ok && y < landingY {
+			landingY = y
+		}
+	}
+	return landingY
+}
+
+func terrainSurfaceYAt(terrain world.Terrain, x float64) (float64, bool) {
+	points := world.TerrainPoints(terrain)
+	for i := 0; i < len(points)-1; i++ {
+		a := points[i]
+		b := points[i+1]
+		if math.Abs(a.X-b.X) <= wallSkin || isSteepTerrainStep(a, b) {
+			continue
+		}
+		minX := math.Min(a.X, b.X)
+		maxX := math.Max(a.X, b.X)
+		if x < minX || x > maxX || terrainSurfaceEndpointTouchesWall(points, i, x) {
+			continue
+		}
+		t := (x - a.X) / (b.X - a.X)
+		return a.Y + (b.Y-a.Y)*t, true
+	}
+	return 0, false
+}
+
+func terrainSurfaceEndpointTouchesWall(points []world.Point, segmentIndex int, x float64) bool {
+	if math.Abs(x-points[segmentIndex].X) <= wallSkin {
+		return terrainPointTouchesVerticalSegment(points, segmentIndex)
+	}
+	if math.Abs(x-points[segmentIndex+1].X) <= wallSkin {
+		return terrainPointTouchesVerticalSegment(points, segmentIndex+1)
+	}
+	return false
+}
+
+func terrainPointTouchesVerticalSegment(points []world.Point, pointIndex int) bool {
+	point := points[pointIndex]
+	if pointIndex > 0 && math.Abs(points[pointIndex-1].X-point.X) <= wallSkin {
+		return true
+	}
+	return pointIndex+1 < len(points) && math.Abs(points[pointIndex+1].X-point.X) <= wallSkin
 }
 
 func polygonLandingY(polygon world.Polygon, player Player) (float64, bool) {

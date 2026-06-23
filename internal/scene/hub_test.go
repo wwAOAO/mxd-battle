@@ -1436,7 +1436,7 @@ func TestHubDoesNotDropThroughGround(t *testing.T) {
 	if !ok {
 		t.Fatal("expected drop request to be handled")
 	}
-	if !player.OnGround || player.Y != terrainLandingY(hub.rooms[RoomX].mapDef, player.X) {
+	if !player.OnGround || player.Y != terrainLandingY(hub.rooms[RoomX].mapDef, player) {
 		t.Fatalf("expected ground drop to leave player grounded, got %+v", player)
 	}
 }
@@ -1544,6 +1544,220 @@ func TestHubBlocksHorizontalMovementThroughTerrainSideByDefault(t *testing.T) {
 	}
 }
 
+func dangerousWoodsTestMap() world.MapConfig {
+	return world.MapConfig{
+		ID:           "Dangerous_Woods",
+		Width:        2400,
+		Height:       1500,
+		GroundY:      1500,
+		Gravity:      2600,
+		JumpVelocity: -980,
+		MoveSpeed:    420,
+		Spawn:        world.Point{X: 180, Y: 1500},
+		Terrain: []world.Terrain{
+			{
+				ID: "terrain_1",
+				Points: []world.Point{
+					{X: -4, Y: 998},
+					{X: 795, Y: 995},
+					{X: 793, Y: 1128},
+					{X: 1607, Y: 1128},
+					{X: 1602, Y: 1002},
+					{X: 1806, Y: 1002},
+					{X: 1802, Y: 899},
+					{X: 2405, Y: 899},
+				},
+				SolidSides:   world.BoolPtr(true),
+				SolidCeiling: world.BoolPtr(false),
+			},
+		},
+	}
+}
+func TestHubDangerousWoodsAllowsWalkingFromHighSideToLowSide(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: dangerousWoodsTestMap(),
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "dangerous-drop", X: 760, Y: 995}, &recordingPeer{}); err != nil {
+		t.Fatalf("join dangerous-drop: %v", err)
+	}
+
+	player, ok := hub.Move("dangerous-drop", 830, 995)
+	if !ok {
+		t.Fatal("expected dangerous-drop move to succeed")
+	}
+	if player.X != 830 || player.OnGround {
+		t.Fatalf("expected high-side-to-low-side move to leave terrain and start falling, got %+v", player)
+	}
+}
+func TestHubDangerousWoodsSingleJumpClearsTerrainStep(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: dangerousWoodsTestMap(),
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "dangerous-jumper", X: 883, Y: 1128}, &recordingPeer{}); err != nil {
+		t.Fatalf("join dangerous-jumper: %v", err)
+	}
+	if _, ok := hub.SetInput("dangerous-jumper", -1, 0); !ok {
+		t.Fatal("expected input to be set")
+	}
+	if _, ok := hub.Jump("dangerous-jumper"); !ok {
+		t.Fatal("expected jump to succeed")
+	}
+
+	for i := 0; i < 18; i++ {
+		hub.StepPhysics(testTime().Add(time.Duration(i)*50*time.Millisecond), 0.05)
+	}
+
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	player := state.Players["dangerous-jumper"]
+	if player.X >= 793-DefaultPlayerWidth/2 || player.Y >= 1128 {
+		t.Fatalf("expected one jump while moving left to clear terrain step, got %+v", player)
+	}
+}
+func TestHubBlocksDangerousWoodsLowToHighTerrainMove(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: dangerousWoodsTestMap(),
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "dangerous-low", X: 883, Y: 1112}, &recordingPeer{}); err != nil {
+		t.Fatalf("join dangerous-low: %v", err)
+	}
+
+	player, ok := hub.Move("dangerous-low", 650, 989)
+	if !ok {
+		t.Fatal("expected dangerous-low move to succeed")
+	}
+	if player.X < 793+DefaultPlayerWidth/2 || player.Y < 1100 {
+		t.Fatalf("expected low-to-high terrain move to stay blocked below, got %+v", player)
+	}
+}
+func TestHubDoesNotSnapUpTerrainVerticalSideFromBelow(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_vertical_side_no_snap",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "step",
+					Points: []world.Point{
+						{X: 0, Y: 1300},
+						{X: 500, Y: 1300},
+						{X: 500, Y: 1500},
+						{X: 1000, Y: 1500},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "low-side", X: 540, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join low-side: %v", err)
+	}
+
+	player, ok := hub.Move("low-side", 526, 1500)
+	if !ok {
+		t.Fatal("expected low-side move to succeed")
+	}
+	if player.X < 526 || player.Y != 1500 {
+		t.Fatalf("expected player to stay below when only the left edge reaches upper terrain, got %+v", player)
+	}
+}
+func TestHubDoesNotSnapUpTerrainNearVerticalSideFromBelow(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_near_vertical_side_no_snap",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "near_vertical_step",
+					Points: []world.Point{
+						{X: 0, Y: 1300},
+						{X: 500, Y: 1300},
+						{X: 504, Y: 1500},
+						{X: 1000, Y: 1500},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "near-vertical-low", X: 540, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join near-vertical-low: %v", err)
+	}
+
+	player, ok := hub.Move("near-vertical-low", 526, 1500)
+	if !ok {
+		t.Fatal("expected near-vertical-low move to succeed")
+	}
+	if player.Y != 1500 {
+		t.Fatalf("expected near-vertical terrain side to not snap player upward, got %+v", player)
+	}
+}
+func TestHubBlocksHorizontalMovementThroughTerrainSideFromRight(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_side_from_right",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "step",
+					Points: []world.Point{
+						{X: 0, Y: 1300},
+						{X: 500, Y: 1300},
+						{X: 500, Y: 1500},
+						{X: 1000, Y: 1500},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "terrain-right", X: 540, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join terrain-right: %v", err)
+	}
+
+	player, ok := hub.Move("terrain-right", 440, 1500)
+	if !ok {
+		t.Fatal("expected terrain-right move to succeed")
+	}
+	if player.X <= 500+DefaultPlayerWidth/2 {
+		t.Fatalf("expected terrain side to block left movement, got %+v", player)
+	}
+}
 func TestHubAllowsHorizontalMovementThroughTerrainSideWhenDisabled(t *testing.T) {
 	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
 		RoomX: {
@@ -1582,6 +1796,162 @@ func TestHubAllowsHorizontalMovementThroughTerrainSideWhenDisabled(t *testing.T)
 	}
 	if player.X != 560 {
 		t.Fatalf("expected terrain with solidSides=false to allow side movement, got %+v", player)
+	}
+}
+func TestHubBlocksWalkingUpSteepTerrainSide(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_steep_terrain_side",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "steep_step",
+					Points: []world.Point{
+						{X: 0, Y: 1500},
+						{X: 500, Y: 1500},
+						{X: 650, Y: 1300},
+						{X: 1000, Y: 1300},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "steep-runner", X: 480, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join steep-runner: %v", err)
+	}
+
+	player, ok := hub.Move("steep-runner", 700, 1500)
+	if !ok {
+		t.Fatal("expected steep-runner move to succeed")
+	}
+	if player.X >= 650-DefaultPlayerWidth/2 {
+		t.Fatalf("expected steep terrain side to block walking up without jumping, got %+v", player)
+	}
+}
+func TestHubAllowsWalkingUpWalkableTerrainSlope(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_walkable_terrain_slope",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "walkable_slope",
+					Points: []world.Point{
+						{X: 0, Y: 1500},
+						{X: 500, Y: 1500},
+						{X: 760, Y: 1380},
+						{X: 1000, Y: 1380},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "slope-walker", X: 480, Y: 1500}, &recordingPeer{}); err != nil {
+		t.Fatalf("join slope-walker: %v", err)
+	}
+
+	player, ok := hub.Move("slope-walker", 700, 1500)
+	if !ok {
+		t.Fatal("expected slope-walker move to succeed")
+	}
+	if player.X != 700 || player.Y >= 1500 {
+		t.Fatalf("expected walkable slope to allow movement upward, got %+v", player)
+	}
+}
+func TestHubAllowsWalkingOffTerrainLedge(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_ledge_drop",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "ledge",
+					Points: []world.Point{
+						{X: 0, Y: 1300},
+						{X: 500, Y: 1300},
+						{X: 500, Y: 1500},
+						{X: 900, Y: 1500},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "ledge-walker", X: 460, Y: 1300}, &recordingPeer{}); err != nil {
+		t.Fatalf("join ledge-walker: %v", err)
+	}
+
+	player, ok := hub.Move("ledge-walker", 560, 1300)
+	if !ok {
+		t.Fatal("expected ledge-walker move to succeed")
+	}
+	if player.X != 560 || player.OnGround {
+		t.Fatalf("expected player to walk off terrain ledge and start falling, got %+v", player)
+	}
+}
+func TestHubKeepsPlayerSupportedUntilFullyPastTerrainLedge(t *testing.T) {
+	hub, err := NewHub(nil, nil, map[string]world.MapConfig{
+		RoomX: {
+			ID:           "test_terrain_ledge_support",
+			Width:        1800,
+			Height:       1800,
+			GroundY:      1500,
+			Gravity:      2600,
+			JumpVelocity: -980,
+			MoveSpeed:    420,
+			Spawn:        world.Point{X: 180, Y: 1500},
+			Terrain: []world.Terrain{
+				{
+					ID: "ledge",
+					Points: []world.Point{
+						{X: 0, Y: 1300},
+						{X: 500, Y: 1300},
+						{X: 500, Y: 1500},
+						{X: 900, Y: 1500},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	if _, err := hub.Join(RoomX, Player{ID: "ledge-edge", X: 460, Y: 1300}, &recordingPeer{}); err != nil {
+		t.Fatalf("join ledge-edge: %v", err)
+	}
+
+	player, ok := hub.Move("ledge-edge", 520, 1300)
+	if !ok {
+		t.Fatal("expected ledge-edge move to succeed")
+	}
+	if player.X != 520 || player.Y != 1300 || !player.OnGround {
+		t.Fatalf("expected player to stay supported while foot still overlaps ledge, got %+v", player)
 	}
 }
 func TestHubBlocksHorizontalMovementThroughWall(t *testing.T) {

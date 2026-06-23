@@ -31,30 +31,27 @@
           "x": 2405,
           "y": 993
         }
-      ]
-    },
-    {
-      "id": "terrain_2",
-      "points": [
-        {
-          "x": 1196,
-          "y": 700
-        },
-        {
-          "x": 1416,
-          "y": 700
-        }
-      ]
+      ],
+      "solidSides": true,
+      "solidCeiling": false
     }
   ],
   "polygons": [],
-  "platforms": [],
+  "platforms": [
+    {
+      "id": "platform_1",
+      "x": 1296,
+      "y": 686,
+      "width": 271,
+      "height": 38
+    }
+  ],
   "walls": [],
   "ladders": [],
   "portals": [
     {
       "id": "portal_1",
-      "targetRoomId": "Treasure_Island.city",
+      "targetRoomId": "Rainbow_Island.snail_garden",
       "area": {
         "x": 2336,
         "y": 845,

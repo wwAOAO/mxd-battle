@@ -4,3 +4,4 @@ tmp/
 dist/
 build/
 .DS_Store
+.codex_frames
