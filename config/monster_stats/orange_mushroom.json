@@ -1,0 +1,20 @@
+{
+    "id": "orange_mushroom",
+    "name": "Orange Mushroom",
+    "width": 74,
+    "height": 60,
+    "hpMax": 90,
+    "expReward": 28,
+    "moveSpeed": 90,
+    "aggroRange": 300,
+    "respawnMs": 5000,
+    "combatStat": {
+        "physicalDefense": 4,
+        "magicDefense": 3,
+        "physicalAttackMin": 14,
+        "physicalAttackMax": 22
+    },
+    "attackRange": 78,
+    "attackHeight": 66,
+    "attackIntervalMs": 1400
+}

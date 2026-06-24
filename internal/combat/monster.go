@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 type MonsterStatConfigs map[string]MonsterStatConfig
@@ -25,18 +27,71 @@ type MonsterStatConfig struct {
 }
 
 func LoadMonsterStatConfigs(path string) (MonsterStatConfigs, error) {
-	payload, err := os.ReadFile(path)
+	configs, err := loadMonsterStatConfigFiles(path)
 	if err != nil {
-		return nil, fmt.Errorf("read monster stat config: %w", err)
-	}
-
-	var configs MonsterStatConfigs
-	if err := json.Unmarshal(payload, &configs); err != nil {
-		return nil, fmt.Errorf("decode monster stat config: %w", err)
+		return nil, err
 	}
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("monster stat config must define monsters")
 	}
+	return normalizeMonsterStatConfigs(configs), nil
+}
+
+func loadMonsterStatConfigFiles(path string) (MonsterStatConfigs, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat monster stat config: %w", err)
+	}
+	configs := make(MonsterStatConfigs)
+	if !info.IsDir() {
+		if err := loadMonsterStatConfigFile(path, configs); err != nil {
+			return nil, err
+		}
+		return configs, nil
+	}
+
+	if err := filepath.WalkDir(path, func(filePath string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(filePath) != ".json" {
+			return nil
+		}
+		return loadMonsterStatConfigFile(filePath, configs)
+	}); err != nil {
+		return nil, fmt.Errorf("read monster stat config directory: %w", err)
+	}
+	return configs, nil
+}
+
+func loadMonsterStatConfigFile(path string, configs MonsterStatConfigs) error {
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read monster stat config %s: %w", path, err)
+	}
+
+	var group MonsterStatConfigs
+	if err := json.Unmarshal(payload, &group); err == nil {
+		for id, config := range group {
+			configs[id] = config
+		}
+		return nil
+	}
+
+	var config MonsterStatConfig
+	if err := json.Unmarshal(payload, &config); err != nil {
+		return fmt.Errorf("decode monster stat config %s: %w", path, err)
+	}
+	id := config.ID
+	if id == "" {
+		id = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		config.ID = id
+	}
+	configs[id] = config
+	return nil
+}
+
+func normalizeMonsterStatConfigs(configs MonsterStatConfigs) MonsterStatConfigs {
 	for id, config := range configs {
 		if config.ID == "" {
 			config.ID = id
@@ -73,5 +128,5 @@ func LoadMonsterStatConfigs(path string) (MonsterStatConfigs, error) {
 		}
 		configs[id] = config
 	}
-	return configs, nil
+	return configs
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 const DefaultJobCode = "beginner"
@@ -265,19 +267,64 @@ func calculateAllocatedFloatStat(stat BaseStat, percent StatPercent) float64 {
 }
 
 func LoadJobStatConfigs(path string) (JobStatConfigs, error) {
-	payload, err := os.ReadFile(path)
+	configs, err := loadJobStatConfigFiles(path)
 	if err != nil {
-		return nil, fmt.Errorf("read job stat config: %w", err)
-	}
-
-	var configs JobStatConfigs
-	if err := json.Unmarshal(payload, &configs); err != nil {
-		return nil, fmt.Errorf("decode job stat config: %w", err)
+		return nil, err
 	}
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("job stat config must define jobs")
 	}
 	return configs, nil
+}
+
+func loadJobStatConfigFiles(path string) (JobStatConfigs, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat job stat config: %w", err)
+	}
+	configs := make(JobStatConfigs)
+	if !info.IsDir() {
+		if err := loadJobStatConfigFile(path, configs); err != nil {
+			return nil, err
+		}
+		return configs, nil
+	}
+
+	if err := filepath.WalkDir(path, func(filePath string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(filePath) != ".json" {
+			return nil
+		}
+		return loadJobStatConfigFile(filePath, configs)
+	}); err != nil {
+		return nil, fmt.Errorf("read job stat config directory: %w", err)
+	}
+	return configs, nil
+}
+
+func loadJobStatConfigFile(path string, configs JobStatConfigs) error {
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read job stat config %s: %w", path, err)
+	}
+
+	var group JobStatConfigs
+	if err := json.Unmarshal(payload, &group); err == nil {
+		for id, config := range group {
+			configs[id] = config
+		}
+		return nil
+	}
+
+	var config JobStatConfig
+	if err := json.Unmarshal(payload, &config); err != nil {
+		return fmt.Errorf("decode job stat config %s: %w", path, err)
+	}
+	id := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	configs[id] = config
+	return nil
 }
 
 func DefaultJobStatConfigs() JobStatConfigs {

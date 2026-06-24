@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -44,14 +46,9 @@ type SkillTiming struct {
 }
 
 func LoadSkillConfigs(path string) (SkillConfigs, error) {
-	payload, err := os.ReadFile(path)
+	configs, err := loadSkillConfigFiles(path)
 	if err != nil {
-		return nil, fmt.Errorf("read skill config: %w", err)
-	}
-
-	var configs SkillConfigs
-	if err := json.Unmarshal(payload, &configs); err != nil {
-		return nil, fmt.Errorf("decode skill config: %w", err)
+		return nil, err
 	}
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("skill config must define skills")
@@ -63,6 +60,60 @@ func LoadSkillConfigs(path string) (SkillConfigs, error) {
 		}
 	}
 	return configs, nil
+}
+
+func loadSkillConfigFiles(path string) (SkillConfigs, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat skill config: %w", err)
+	}
+	configs := make(SkillConfigs)
+	if !info.IsDir() {
+		if err := loadSkillConfigFile(path, configs); err != nil {
+			return nil, err
+		}
+		return configs, nil
+	}
+
+	if err := filepath.WalkDir(path, func(filePath string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(filePath) != ".json" {
+			return nil
+		}
+		return loadSkillConfigFile(filePath, configs)
+	}); err != nil {
+		return nil, fmt.Errorf("read skill config directory: %w", err)
+	}
+	return configs, nil
+}
+
+func loadSkillConfigFile(path string, configs SkillConfigs) error {
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read skill config %s: %w", path, err)
+	}
+
+	var group SkillConfigs
+	if err := json.Unmarshal(payload, &group); err == nil {
+		for id, config := range group {
+			configs[id] = config
+		}
+		return nil
+	}
+
+	var config SkillConfig
+	if err := json.Unmarshal(payload, &config); err != nil {
+		return fmt.Errorf("decode skill config %s: %w", path, err)
+	}
+	id := config.ID
+	if id == "" {
+		id = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		config.ID = id
+	}
+	configs[id] = config
+	return nil
 }
 
 func DefaultSkillConfigs() SkillConfigs {

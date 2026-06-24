@@ -1,0 +1,20 @@
+{
+    "id": "green_slime",
+    "name": "Green Slime",
+    "width": 72,
+    "height": 56,
+    "hpMax": 60,
+    "expReward": 18,
+    "moveSpeed": 110,
+    "aggroRange": 260,
+    "respawnMs": 3500,
+    "combatStat": {
+        "physicalDefense": 2,
+        "magicDefense": 1,
+        "physicalAttackMin": 10,
+        "physicalAttackMax": 16
+    },
+    "attackRange": 70,
+    "attackHeight": 60,
+    "attackIntervalMs": 1200
+}
