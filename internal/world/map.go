@@ -10,24 +10,66 @@ import (
 )
 
 type MapConfig struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	Width        float64    `json:"width"`
-	Height       float64    `json:"height"`
-	GroundY      float64    `json:"groundY"`
-	Gravity      float64    `json:"gravity"`
-	JumpVelocity float64    `json:"jumpVelocity"`
-	MoveSpeed    float64    `json:"moveSpeed"`
-	Spawn        Point      `json:"spawn"`
-	Terrain      []Terrain  `json:"terrain,omitempty"`
-	Polygons     []Polygon  `json:"polygons,omitempty"`
-	Platforms    []Platform `json:"platforms"`
-	Walls        []Wall     `json:"walls"`
-	Ladders      []Ladder   `json:"ladders,omitempty"`
-	Portals      []Portal   `json:"portals"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Width         float64        `json:"width"`
+	Height        float64        `json:"height"`
+	GroundY       float64        `json:"groundY"`
+	Gravity       float64        `json:"gravity"`
+	JumpVelocity  float64        `json:"jumpVelocity"`
+	MoveSpeed     float64        `json:"moveSpeed"`
+	Spawn         Point          `json:"spawn"`
+	Terrain       []Terrain      `json:"terrain,omitempty"`
+	Polygons      []Polygon      `json:"polygons,omitempty"`
+	Platforms     []Platform     `json:"platforms"`
+	Walls         []Wall         `json:"walls"`
+	Ladders       []Ladder       `json:"ladders,omitempty"`
+	Portals       []Portal       `json:"portals"`
+	MonsterSpawns []MonsterSpawn `json:"monsterSpawns,omitempty"`
 }
 
 type MapsConfig map[string]map[string]string
+
+func RoomIDsForMapPath(worldMapsPath string, mapPath string) ([]string, error) {
+	payload, err := os.ReadFile(worldMapsPath)
+	if err != nil {
+		return nil, fmt.Errorf("read world maps file: %w", err)
+	}
+
+	var config MapsConfig
+	if err := json.Unmarshal(payload, &config); err != nil {
+		return nil, fmt.Errorf("decode world maps file: %w", err)
+	}
+
+	targetPath, err := filepath.Abs(mapPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve map file path: %w", err)
+	}
+	targetPath = filepath.Clean(targetPath)
+
+	baseDir := filepath.Dir(worldMapsPath)
+	roomIDs := make([]string, 0)
+	for groupName, rooms := range config {
+		for roomID, configuredPath := range rooms {
+			if configuredPath == "" {
+				continue
+			}
+			fullPath := configuredPath
+			if !filepath.IsAbs(fullPath) {
+				fullPath = filepath.Join(baseDir, fullPath)
+			}
+			absPath, err := filepath.Abs(fullPath)
+			if err != nil {
+				return nil, fmt.Errorf("resolve group %q room %q map file path: %w", groupName, roomID, err)
+			}
+			if filepath.Clean(absPath) == targetPath {
+				roomIDs = append(roomIDs, groupName+"."+roomID)
+			}
+		}
+	}
+	slices.Sort(roomIDs)
+	return roomIDs, nil
+}
 
 func LoadMaps(path string) (map[string]MapConfig, error) {
 	payload, err := os.ReadFile(path)
@@ -96,6 +138,7 @@ func NormalizeMapConfig(mapDef MapConfig) MapConfig {
 	mapDef.Terrain = normalizeTerrainList(mapDef.Terrain)
 	mapDef.Platforms = normalizePlatformList(mapDef.Platforms)
 	mapDef.Walls = normalizeWallList(mapDef.Walls)
+	mapDef.MonsterSpawns = slices.Clone(mapDef.MonsterSpawns)
 	return mapDef
 }
 
@@ -197,6 +240,7 @@ func cloneRoomMaps(source map[string]MapConfig) map[string]MapConfig {
 		mapDef.Walls = cloneWalls(mapDef.Walls)
 		mapDef.Ladders = slices.Clone(mapDef.Ladders)
 		mapDef.Portals = slices.Clone(mapDef.Portals)
+		mapDef.MonsterSpawns = slices.Clone(mapDef.MonsterSpawns)
 		cloned[roomID] = mapDef
 	}
 	return cloned

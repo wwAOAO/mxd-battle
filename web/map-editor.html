@@ -183,13 +183,52 @@
         background: #eaf1ff;
       }
 
-      .map-select-status {
+      .layer-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .layer-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        min-height: 28px;
+        padding: 4px 6px;
+        border: 1px solid #d8e0ea;
+        border-radius: 6px;
+        color: #253149;
+        background: #f8fafc;
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .layer-toggle input {
+        width: 16px;
+        min-width: 16px;
+        height: 16px;
+        min-height: 16px;
+        margin: 0;
+        padding: 0;
+      }
+
+      .layer-toggle span {
+        min-width: 0;
         overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .map-select-status {
+        overflow-wrap: anywhere;
         color: #516077;
         font-size: 12px;
         font-weight: 700;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        line-height: 1.45;
+        white-space: normal;
       }
 
       .tag {
@@ -377,10 +416,16 @@
             <button id="addWall">Wall</button>
             <button id="addLadder">Ladder</button>
             <button id="addPortal">Portal</button>
+            <button id="addMonsterSpawn">Monster</button>
             <button id="copyObject" class="secondary">Copy</button>
             <button id="deleteObject" class="danger">Delete</button>
           </div>
           <div id="objectList" class="object-list"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Layers</h2>
+          <div id="layerToggles" class="object-list"></div>
         </div>
 
         <div id="editor" class="panel">
@@ -418,6 +463,7 @@
           </div>
         </div>
         <div class="toolbar">
+          <button id="saveConfig">Save To Config</button>
           <button id="download">Download JSON</button>
           <button id="copy" class="secondary">Copy JSON</button>
           <button id="loadJSON" class="secondary">Load JSON</button>
@@ -442,6 +488,7 @@
         jumpVelocity: -980,
         moveSpeed: 420,
         spawn: { x: 180, y: 1500 },
+        monsterSpawns: [],
         terrain: [],
         polygons: [],
         platforms: [],
@@ -459,6 +506,36 @@
       let mapFiles = [];
       let activeMapPath = "";
       let roomOptions = [];
+      let monsterOptions = [];
+      let saveStatus = "";
+      const layerVisibility = {
+        grid: true,
+        ground: true,
+        spawn: true,
+        monsterSpawns: true,
+        terrain: true,
+        polygons: true,
+        platforms: true,
+        walls: true,
+        ladders: true,
+        portals: true,
+        portalTargets: true,
+        collisionFlags: true,
+      };
+      const layerDefinitions = [
+        ["grid", "Grid"],
+        ["ground", "Ground"],
+        ["spawn", "Player Spawn"],
+        ["monsterSpawns", "Monster Spawns"],
+        ["terrain", "Terrain"],
+        ["polygons", "Polygons"],
+        ["platforms", "Platforms"],
+        ["walls", "Walls"],
+        ["ladders", "Ladders"],
+        ["portals", "Portals"],
+        ["portalTargets", "Portal Targets"],
+        ["collisionFlags", "Collision Flags"],
+      ];
 
       const fields = [
         "mapId",
@@ -508,6 +585,7 @@
       function allObjects() {
         return [
           { type: "spawn", item: map.spawn },
+          ...map.monsterSpawns.map((item) => ({ type: "monsterSpawn", item })),
           ...map.terrain.map((item) => ({ type: "terrain", item })),
           ...map.polygons.map((item) => ({ type: "polygon", item })),
           ...map.platforms.map((item) => ({ type: "platform", item })),
@@ -524,6 +602,14 @@
             y: map.spawn.y - 12,
             width: 24,
             height: 24,
+          };
+        }
+        if (entry.type === "monsterSpawn") {
+          return {
+            x: entry.item.x - 14,
+            y: entry.item.y - 14,
+            width: 28,
+            height: 28,
           };
         }
         if (entry.type === "terrain" || entry.type === "polygon") {
@@ -626,6 +712,44 @@
         return normalized;
       }
 
+      function normalizeLadder(ladder) {
+        return {
+          id: ladder.id || makeId("ladder", map.ladders),
+          x: Number(ladder.x) || 0,
+          y: Number(ladder.y) || 0,
+          width: Number(ladder.width) || 0,
+          height: Number(ladder.height) || 0,
+          climbSpeed: Number(ladder.climbSpeed) || 240,
+        };
+      }
+
+      function normalizePortal(portal) {
+        return {
+          id: portal.id || makeId("portal", map.portals),
+          targetRoomId: portal.targetRoomId || roomOptions[0] || "",
+          area: {
+            x: Number(portal.area && portal.area.x) || 0,
+            y: Number(portal.area && portal.area.y) || 0,
+            width: Number(portal.area && portal.area.width) || 0,
+            height: Number(portal.area && portal.area.height) || 0,
+          },
+          target: {
+            x: Number(portal.target && portal.target.x) || 0,
+            y: Number(portal.target && portal.target.y) || 0,
+          },
+        };
+      }
+
+      function normalizeMonsterSpawn(spawn) {
+        return {
+          id: spawn.id || makeId("monster_spawn", map.monsterSpawns),
+          monsterId: spawn.monsterId || "green_slime",
+          x: Number(spawn.x) || 0,
+          y: Number(spawn.y) || 0,
+          respawnMs: Number(spawn.respawnMs) || 4000,
+        };
+      }
+
       function polygonPoints(polygon) {
         if (!Array.isArray(polygon.points)) polygon.points = [];
         return polygon.points;
@@ -640,7 +764,12 @@
 
       function objectId(entry) {
         if (entry.type === "spawn") return "Spawn";
+        if (entry.type === "monsterSpawn") return entry.item.id || "Monster Spawn";
         return entry.item.id || "(unnamed)";
+      }
+
+      function isPointObject(type) {
+        return type === "spawn" || type === "monsterSpawn";
       }
 
       function makeId(prefix, list) {
@@ -736,6 +865,18 @@
         selectObject("portal", item);
       }
 
+      function addMonsterSpawn() {
+        const item = {
+          id: makeId("monster_spawn", map.monsterSpawns),
+          monsterId: "green_slime",
+          x: 360,
+          y: map.groundY,
+          respawnMs: 4000,
+        };
+        map.monsterSpawns.push(item);
+        selectObject("monsterSpawn", item);
+      }
+
       function selectObject(type, item) {
         selected = { type, item };
         render();
@@ -744,17 +885,19 @@
       function deleteSelected() {
         if (!selected || selected.type === "spawn") return;
         const list =
-          selected.type === "terrain"
-            ? map.terrain
-            : selected.type === "polygon"
-              ? map.polygons
-              : selected.type === "platform"
-                ? map.platforms
-                : selected.type === "wall"
-                  ? map.walls
-                  : selected.type === "ladder"
-                    ? map.ladders
-                    : map.portals;
+          selected.type === "monsterSpawn"
+            ? map.monsterSpawns
+            : selected.type === "terrain"
+              ? map.terrain
+              : selected.type === "polygon"
+                ? map.polygons
+                : selected.type === "platform"
+                  ? map.platforms
+                  : selected.type === "wall"
+                    ? map.walls
+                    : selected.type === "ladder"
+                      ? map.ladders
+                      : map.portals;
         const index = list.indexOf(selected.item);
         if (index >= 0) list.splice(index, 1);
         selected = null;
@@ -777,17 +920,19 @@
 
         const clone = JSON.parse(JSON.stringify(selected.item));
         const list =
-          selected.type === "terrain"
-            ? map.terrain
-            : selected.type === "polygon"
-              ? map.polygons
-              : selected.type === "platform"
-                ? map.platforms
-                : selected.type === "wall"
-                  ? map.walls
-                  : selected.type === "ladder"
-                    ? map.ladders
-                    : map.portals;
+          selected.type === "monsterSpawn"
+            ? map.monsterSpawns
+            : selected.type === "terrain"
+              ? map.terrain
+              : selected.type === "polygon"
+                ? map.polygons
+                : selected.type === "platform"
+                  ? map.platforms
+                  : selected.type === "wall"
+                    ? map.walls
+                    : selected.type === "ladder"
+                      ? map.ladders
+                      : map.portals;
         clone.id = makeId(selected.type, list);
         offsetObject(selected.type, clone, 40, 40);
         list.push(clone);
@@ -808,6 +953,11 @@
           item.area.y += dy;
           item.target.x += dx;
           item.target.y += dy;
+          return;
+        }
+        if (type === "monsterSpawn") {
+          item.x += dx;
+          item.y += dy;
           return;
         }
         item.x += dx;
@@ -840,7 +990,9 @@
         }
         select.disabled = false;
         select.value = activeMapPath;
-        status.textContent = activeMapPath || `${mapFiles.length} maps available`;
+        status.textContent = saveStatus || activeMapPath || `${mapFiles.length} maps available`;
+        const saveButton = $("saveConfig");
+        if (saveButton) saveButton.disabled = !activeMapPath;
       }
 
       async function loadRooms() {
@@ -852,6 +1004,18 @@
           if (selected && selected.type === "portal") renderSelectedEditor();
         } catch (error) {
           roomOptions = [];
+        }
+      }
+
+      async function loadMonsterStats() {
+        try {
+          const response = await fetch("/monster-stats");
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const payload = await response.json();
+          monsterOptions = Object.keys(payload || {}).sort();
+          if (selected && selected.type === "monsterSpawn") renderSelectedEditor();
+        } catch (error) {
+          monsterOptions = [];
         }
       }
 
@@ -911,6 +1075,28 @@
         }
       }
 
+      function renderLayerToggles() {
+        const root = $("layerToggles");
+        root.className = "layer-grid";
+        root.textContent = "";
+        for (const [key, labelText] of layerDefinitions) {
+          const label = document.createElement("label");
+          label.className = "layer-toggle";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = Boolean(layerVisibility[key]);
+          input.addEventListener("change", () => {
+            layerVisibility[key] = input.checked;
+            draw();
+          });
+          const textNode = document.createElement("span");
+          textNode.textContent = labelText;
+          label.appendChild(input);
+          label.appendChild(textNode);
+          root.appendChild(label);
+        }
+      }
+
       function renderSelectedEditor() {
         const editor = $("editor");
         editor.textContent = "";
@@ -932,6 +1118,23 @@
             ["X", map.spawn, "x"],
             ["Y", map.spawn, "y"],
           ]);
+          return;
+        }
+
+        if (selected.type === "monsterSpawn") {
+          addTextInput(editor, "ID", selected.item, "id");
+          addSelectInput(
+            editor,
+            "Monster ID",
+            selected.item,
+            "monsterId",
+            monsterOptions,
+          );
+          addNumberRow(editor, [
+            ["X", selected.item, "x"],
+            ["Y", selected.item, "y"],
+          ]);
+          addNumberRow(editor, [["Respawn MS", selected.item, "respawnMs"]]);
           return;
         }
 
@@ -1109,6 +1312,9 @@
             x: Number(nextMap.spawn && nextMap.spawn.x) || 0,
             y: Number(nextMap.spawn && nextMap.spawn.y) || 0,
           },
+          monsterSpawns: Array.isArray(nextMap.monsterSpawns)
+            ? nextMap.monsterSpawns.map(normalizeMonsterSpawn)
+            : [],
           terrain: Array.isArray(nextMap.terrain)
             ? nextMap.terrain.map(normalizeTerrain)
             : [],
@@ -1121,8 +1327,12 @@
           walls: Array.isArray(nextMap.walls)
             ? nextMap.walls.map(normalizeWall)
             : [],
-          ladders: Array.isArray(nextMap.ladders) ? nextMap.ladders : [],
-          portals: Array.isArray(nextMap.portals) ? nextMap.portals : [],
+          ladders: Array.isArray(nextMap.ladders)
+            ? nextMap.ladders.map(normalizeLadder)
+            : [],
+          portals: Array.isArray(nextMap.portals)
+            ? nextMap.portals.map(normalizePortal)
+            : [],
         };
       }
 
@@ -1138,6 +1348,8 @@
         Object.assign(map, normalizeMap(nextMap));
         selected = null;
         drag = null;
+        activeMapPath = "";
+        saveStatus = "Loaded JSON from textarea. Select a map file before saving to config.";
         $("fileName").value = `${map.id || "map_custom"}.json`;
         syncForm();
         render();
@@ -1145,6 +1357,45 @@
 
       function renderJSON() {
         $("jsonOutput").value = exportMap();
+      }
+
+      async function saveMapToConfig() {
+        if (!activeMapPath) {
+          window.alert("Select a map file before saving to config.");
+          return;
+        }
+        const button = $("saveConfig");
+        button.disabled = true;
+        button.textContent = "Saving...";
+        saveStatus = `Saving ${activeMapPath}...`;
+        renderMapList();
+        try {
+          const response = await fetch(`/map-files/${encodeURI(activeMapPath)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: exportMap(),
+          });
+          let payload = {};
+          try {
+            payload = await response.json();
+          } catch (_error) {}
+          if (!response.ok) {
+            throw new Error(payload.error || `HTTP ${response.status}`);
+          }
+                    const reloaded = Array.isArray(payload.reloadedRooms)
+            ? payload.reloadedRooms.join(", ")
+            : "";
+          const kicked = Number(payload.kickedPlayers) || 0;
+          saveStatus = reloaded
+            ? `Saved ${activeMapPath}. Reloaded ${reloaded}; kicked ${kicked} player(s).`
+            : `Saved ${activeMapPath}. No running room uses this map file.`;
+        } catch (error) {
+          saveStatus = `Save failed: ${error.message}`;
+          window.alert(saveStatus);
+        } finally {
+          button.textContent = "Save To Config";
+          renderMapList();
+        }
       }
 
       function renderMouseCoordinates() {
@@ -1211,60 +1462,92 @@
           map.height * view.scale,
         );
 
-        ctx.strokeStyle = "rgba(45, 108, 223, 0.12)";
-        ctx.lineWidth = 1;
-        for (let x = 0; x <= map.width; x += 100) {
-          const a = worldToScreen({ x, y: 0 });
-          const b = worldToScreen({ x, y: map.height });
+        if (layerVisibility.grid) {
+          ctx.strokeStyle = "rgba(45, 108, 223, 0.12)";
+          ctx.lineWidth = 1;
+          for (let x = 0; x <= map.width; x += 100) {
+            const a = worldToScreen({ x, y: 0 });
+            const b = worldToScreen({ x, y: map.height });
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+          for (let y = 0; y <= map.height; y += 100) {
+            const a = worldToScreen({ x: 0, y });
+            const b = worldToScreen({ x: map.width, y });
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+
+        if (layerVisibility.ground) {
+          const groundA = worldToScreen({ x: 0, y: map.groundY });
+          const groundB = worldToScreen({ x: map.width, y: map.groundY });
+          ctx.strokeStyle = "#607b4b";
+          ctx.lineWidth = 4;
           ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
+          ctx.moveTo(groundA.x, groundA.y);
+          ctx.lineTo(groundB.x, groundB.y);
           ctx.stroke();
         }
-        for (let y = 0; y <= map.height; y += 100) {
-          const a = worldToScreen({ x: 0, y });
-          const b = worldToScreen({ x: map.width, y });
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-        }
 
-        const groundA = worldToScreen({ x: 0, y: map.groundY });
-        const groundB = worldToScreen({ x: map.width, y: map.groundY });
-        ctx.strokeStyle = "#607b4b";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(groundA.x, groundA.y);
-        ctx.lineTo(groundB.x, groundB.y);
-        ctx.stroke();
-
-        for (const terrain of map.terrain) {
-          drawTerrain(terrain);
-          if (terrain.solidSides !== false || terrain.solidCeiling === true)
-            drawCollisionFlags({ type: "terrain", item: terrain });
+        if (layerVisibility.terrain) {
+          for (const terrain of map.terrain) {
+            drawTerrain(terrain);
+            if (
+              layerVisibility.collisionFlags &&
+              (terrain.solidSides !== false || terrain.solidCeiling === true)
+            ) {
+              drawCollisionFlags({ type: "terrain", item: terrain });
+            }
+          }
         }
-        for (const polygon of map.polygons) {
-          drawPolygon(polygon);
+        if (layerVisibility.polygons) {
+          for (const polygon of map.polygons) {
+            drawPolygon(polygon);
+          }
         }
-        for (const platform of map.platforms) {
-          drawRect(platform, "#8b9468", "#59643e");
-          if (platform.solidSides || platform.solidCeiling)
-            drawCollisionFlags({ type: "platform", item: platform });
+        if (layerVisibility.platforms) {
+          for (const platform of map.platforms) {
+            drawRect(platform, "#8b9468", "#59643e");
+            if (
+              layerVisibility.collisionFlags &&
+              (platform.solidSides || platform.solidCeiling)
+            ) {
+              drawCollisionFlags({ type: "platform", item: platform });
+            }
+          }
         }
-        for (const wall of map.walls) {
-          drawRect(wall, "#5c6572", "#303743");
-          if (wall.solidSides !== false || wall.solidCeiling !== false)
-            drawCollisionFlags({ type: "wall", item: wall });
+        if (layerVisibility.walls) {
+          for (const wall of map.walls) {
+            drawRect(wall, "#5c6572", "#303743");
+            if (
+              layerVisibility.collisionFlags &&
+              (wall.solidSides !== false || wall.solidCeiling !== false)
+            ) {
+              drawCollisionFlags({ type: "wall", item: wall });
+            }
+          }
         }
-        for (const ladder of map.ladders) {
-          drawLadder(ladder);
+        if (layerVisibility.ladders) {
+          for (const ladder of map.ladders) {
+            drawLadder(ladder);
+          }
         }
-        for (const portal of map.portals) {
-          drawRect(portal.area, "rgba(210, 58, 76, 0.22)", "#d23a4c");
+        if (layerVisibility.portals) {
+          for (const portal of map.portals) {
+            drawPortal(portal);
+          }
         }
-
-        drawSpawn();
+        if (layerVisibility.spawn) drawSpawn();
+        if (layerVisibility.monsterSpawns) {
+          for (const monsterSpawn of map.monsterSpawns) {
+            drawMonsterSpawn(monsterSpawn);
+          }
+        }
 
         if (selected) {
           ctx.strokeStyle = "#f4b400";
@@ -1286,6 +1569,12 @@
               ctx.stroke();
             }
             for (const point of points) drawHandle(point, "#f4b400");
+          } else if (selected.type === "monsterSpawn") {
+            const point = worldToScreen(selected.item);
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 14 * devicePixelRatio, 0, Math.PI * 2);
+            ctx.stroke();
+            drawHandle(point, "#f4b400");
           } else {
             const rect = objectRect(selected);
             const p = worldToScreen({ x: rect.x, y: rect.y });
@@ -1309,6 +1598,104 @@
         ctx.arc(spawn.x, spawn.y, 6 * devicePixelRatio, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+        ctx.fillStyle = "#172033";
+        ctx.font = 11 * devicePixelRatio + "px system-ui";
+        ctx.fillText(
+          "SPAWN",
+          spawn.x + 10 * devicePixelRatio,
+          spawn.y - 10 * devicePixelRatio,
+        );
+      }
+
+      function drawMonsterSpawn(spawn) {
+        const point = worldToScreen(spawn);
+        ctx.fillStyle = "#ef8f22";
+        ctx.strokeStyle = "#5a2d00";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y - 9 * devicePixelRatio);
+        ctx.lineTo(point.x + 9 * devicePixelRatio, point.y);
+        ctx.lineTo(point.x, point.y + 9 * devicePixelRatio);
+        ctx.lineTo(point.x - 9 * devicePixelRatio, point.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#5a2d00";
+        ctx.font = 11 * devicePixelRatio + "px system-ui";
+        ctx.fillText(
+          spawn.monsterId || spawn.id || "monster",
+          point.x + 12 * devicePixelRatio,
+          point.y - 8 * devicePixelRatio,
+        );
+      }
+
+      function drawPortal(portal) {
+        drawRect(portal.area, "rgba(210, 58, 76, 0.22)", "#d23a4c");
+        if (!layerVisibility.portalTargets || !isSelectedPortal(portal)) return;
+
+        const center = worldToScreen({
+          x: portal.area.x + portal.area.width / 2,
+          y: portal.area.y + portal.area.height / 2,
+        });
+        const sameMapTarget = isSameMapPortalTarget(portal);
+        if (!sameMapTarget) {
+          drawPortalTargetLabel(portal);
+          return;
+        }
+
+        const target = worldToScreen(portal.target);
+        ctx.strokeStyle = "rgba(210, 58, 76, 0.72)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8 * devicePixelRatio, 6 * devicePixelRatio]);
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#d23a4c";
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, 7 * devicePixelRatio, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#5f141d";
+        ctx.stroke();
+      }
+
+      function isSelectedPortal(portal) {
+        return selected && selected.type === "portal" && selected.item === portal;
+      }
+
+      function isSameMapPortalTarget(portal) {
+        const targetRoomId = String(portal.targetRoomId || "").trim();
+        if (!targetRoomId) return true;
+        return targetRoomId === map.id;
+      }
+
+      function drawPortalTargetLabel(portal) {
+        const label = portal.targetRoomId || "Target Room";
+        const text = "to " + label;
+        const paddingX = 6 * devicePixelRatio;
+        const height = 20 * devicePixelRatio;
+        const portalTop = worldToScreen({
+          x: portal.area.x + portal.area.width / 2,
+          y: portal.area.y,
+        });
+        ctx.font = 11 * devicePixelRatio + "px system-ui";
+        const width = ctx.measureText(text).width + paddingX * 2;
+        const x = portalTop.x - width / 2;
+        const y = portalTop.y - height - 8 * devicePixelRatio;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.strokeStyle = "#d23a4c";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(x, y, width, height, 5 * devicePixelRatio);
+        } else {
+          ctx.rect(x, y, width, height);
+        }
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#5f141d";
+        ctx.fillText(text, x + paddingX, y + 14 * devicePixelRatio);
       }
 
       function drawSpawnSelection() {
@@ -1456,7 +1843,11 @@
           }
         }
         for (const entry of objects) {
-          if (entry.type !== "terrain" && entry.type !== "polygon") {
+          if (
+            entry.type !== "terrain" &&
+            entry.type !== "polygon" &&
+            !isPointObject(entry.type)
+          ) {
             const handle = hitRectHandle(objectRect(entry), point);
             if (handle) return { ...entry, handle };
           }
@@ -1551,6 +1942,7 @@
       function render() {
         renderMapList();
         renderObjectList();
+        renderLayerToggles();
         renderSelectedEditor();
         renderJSON();
         draw();
@@ -1609,6 +2001,9 @@
           map.spawn.x = Math.round(worldPoint.x);
           map.spawn.y = Math.round(worldPoint.y);
           syncForm();
+        } else if (drag.entry.type === "monsterSpawn") {
+          drag.entry.item.x = Math.round(worldPoint.x);
+          drag.entry.item.y = Math.round(worldPoint.y);
         } else if (drag.entry.type === "terrain" || drag.entry.type === "polygon") {
           const shape = drag.entry.item;
           if (drag.handle && drag.handle.startsWith("point-")) {
@@ -1692,6 +2087,7 @@
       $("addWall").addEventListener("click", addWall);
       $("addLadder").addEventListener("click", addLadder);
       $("addPortal").addEventListener("click", addPortal);
+      $("addMonsterSpawn").addEventListener("click", addMonsterSpawn);
       $("copyObject").addEventListener("click", copySelected);
       $("deleteObject").addEventListener("click", deleteSelected);
 
@@ -1700,6 +2096,8 @@
         event.preventDefault();
         deleteSelected();
       });
+
+      $("saveConfig").addEventListener("click", saveMapToConfig);
 
       $("download").addEventListener("click", () => {
         const blob = new Blob([exportMap()], { type: "application/json" });
@@ -1725,6 +2123,7 @@
       renderMouseCoordinates();
       render();
       loadRooms();
+      loadMonsterStats();
       loadMapFiles();
     </script>
   </body>

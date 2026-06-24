@@ -55,9 +55,7 @@ func (p sceneRoleProvider) GetAccountRole(ctx context.Context, accountID string,
 }
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	cfg := config.Load()
 	worldMaps, err := world.LoadMaps(cfg.WorldMapsFile)
@@ -80,6 +78,11 @@ func main() {
 		logger.Error("failed to load equipment config", "path", cfg.EquipmentStatsFile, "error", err)
 		os.Exit(1)
 	}
+	monsterStats, err := combat.LoadMonsterStatConfigs(cfg.MonsterStatsFile)
+	if err != nil {
+		logger.Error("failed to load monster stat config", "path", cfg.MonsterStatsFile, "error", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -97,7 +100,6 @@ func main() {
 		logger.Warn("nats unavailable; world sync will run without jetstream persistence", "error", err)
 	} else {
 		defer client.Close()
-
 		if err := client.EnsureBattleStream(); err != nil {
 			logger.Warn("jetstream unavailable; world sync will run without event persistence", "error", err)
 			client.Close()
@@ -114,7 +116,7 @@ func main() {
 		publisher = client
 	}
 
-	hub, err := scene.NewHubWithJobsAndEquipment(logger, publisher, worldMaps, jobStats, equipmentStats, skillStats)
+	hub, err := scene.NewHubWithJobsEquipmentAndMonsters(logger, publisher, worldMaps, jobStats, equipmentStats, monsterStats, skillStats)
 	if err != nil {
 		logger.Error("failed to initialize scene hub", "error", err)
 		os.Exit(1)
@@ -126,13 +128,9 @@ func main() {
 	if backendClient != nil {
 		roleProvider = sceneRoleProvider{client: backendClient}
 	}
-	scene.NewHandler(hub, logger, roleProvider).Register(mux)
+	scene.NewHandler(hub, logger, roleProvider, cfg.WorldMapsFile).Register(mux)
 
-	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	server := &http.Server{Addr: cfg.HTTPAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 
 	go func() {
 		logger.Info("mxd battle realtime scene listening", "http_addr", cfg.HTTPAddr, "rooms", hub.Rooms())
@@ -142,28 +140,18 @@ func main() {
 		}
 	}()
 
-	logger.Info("mxd battle service started",
-		"service", cfg.ServiceName,
-		"nats_url", cfg.NATSURL,
-		"stream", cfg.BattleStream,
-		"http_addr", cfg.HTTPAddr,
-		"backend_grpc", cfg.BackendGRPC,
-	)
-
+	logger.Info("mxd battle service started", "service", cfg.ServiceName, "nats_url", cfg.NATSURL, "stream", cfg.BattleStream, "http_addr", cfg.HTTPAddr, "backend_grpc", cfg.BackendGRPC)
 	<-ctx.Done()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("http server did not stop cleanly", "error", err)
 	}
-
 	if client != nil {
 		if err := client.Drain(shutdownCtx); err != nil {
 			logger.Warn("nats drain did not finish cleanly", "error", err)
 		}
 	}
-
 	logger.Info("mxd battle service stopped")
 }

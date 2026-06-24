@@ -19,14 +19,17 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"mxd-battle/internal/world"
 )
 
 const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 type Handler struct {
-	hub          *Hub
-	logger       *slog.Logger
-	roleProvider RoleProvider
+	hub           *Hub
+	logger        *slog.Logger
+	roleProvider  RoleProvider
+	worldMapsFile string
 }
 
 type RoleProvider interface {
@@ -69,14 +72,19 @@ type websocketClient struct {
 	writeMu  sync.Mutex
 }
 
-func NewHandler(hub *Hub, logger *slog.Logger, roleProvider RoleProvider) *Handler {
-	return &Handler{hub: hub, logger: logger, roleProvider: roleProvider}
+func NewHandler(hub *Hub, logger *slog.Logger, roleProvider RoleProvider, worldMapsFile ...string) *Handler {
+	handler := &Handler{hub: hub, logger: logger, roleProvider: roleProvider}
+	if len(worldMapsFile) > 0 {
+		handler.worldMapsFile = worldMapsFile[0]
+	}
+	return handler
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.health)
 	mux.HandleFunc("/job-stats", h.jobStats)
 	mux.HandleFunc("/equipment-stats", h.equipmentStats)
+	mux.HandleFunc("/monster-stats", h.monsterStats)
 	mux.HandleFunc("/map-files", h.mapFiles)
 	mux.HandleFunc("/map-files/", h.mapFile)
 	mux.HandleFunc("/rooms", h.rooms)
@@ -95,6 +103,10 @@ func (h *Handler) rooms(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) jobStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.JobStatConfigs())
+}
+
+func (h *Handler) monsterStats(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, h.hub.MonsterStatConfigs())
 }
 
 type mapFileInfo struct {
@@ -150,6 +162,15 @@ func (h *Handler) mapFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := filepath.Join("config", "maps", clean)
+	if r.Method == http.MethodPut {
+		h.saveMapFile(w, r, path)
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
 	payload, err := os.ReadFile(path)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "map file not found"})
@@ -159,6 +180,76 @@ func (h *Handler) mapFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(payload)
+}
+
+type saveMapFileResponse struct {
+	Status        string   `json:"status"`
+	ReloadedRooms []string `json:"reloadedRooms,omitempty"`
+	KickedPlayers int      `json:"kickedPlayers"`
+}
+
+func (h *Handler) saveMapFile(w http.ResponseWriter, r *http.Request, path string) {
+	payload, err := io.ReadAll(io.LimitReader(r.Body, 2*1024*1024))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read request body"})
+		return
+	}
+	if len(payload) == 2*1024*1024 {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "map file is too large"})
+		return
+	}
+
+	var value any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid map json: " + err.Error()})
+		return
+	}
+
+	formatted, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to format map json"})
+		return
+	}
+	formatted = append(formatted, '\n')
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		h.logger.Warn("failed to create map directory", "path", path, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create map directory"})
+		return
+	}
+	if err := os.WriteFile(path, formatted, 0644); err != nil {
+		h.logger.Warn("failed to save map file", "path", path, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save map file"})
+		return
+	}
+
+	response := saveMapFileResponse{Status: "saved"}
+	if h.worldMapsFile != "" {
+		roomIDs, err := world.RoomIDsForMapPath(h.worldMapsFile, path)
+		if err != nil {
+			h.logger.Warn("failed to find rooms for saved map file", "path", path, "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "saved map, but failed to find rooms to reload"})
+			return
+		}
+		if len(roomIDs) > 0 {
+			maps, err := world.LoadMaps(h.worldMapsFile)
+			if err != nil {
+				h.logger.Warn("failed to reload world maps after save", "path", h.worldMapsFile, "error", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "saved map, but failed to reload world maps"})
+				return
+			}
+			reloadedRooms, kickedPlayers, err := h.hub.ReloadRooms(maps, roomIDs)
+			if err != nil {
+				h.logger.Warn("failed to apply reloaded rooms", "rooms", roomIDs, "error", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "saved map, but failed to apply reloaded rooms"})
+				return
+			}
+			response.ReloadedRooms = reloadedRooms
+			response.KickedPlayers = kickedPlayers
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 func (h *Handler) equipmentStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.EquipmentConfigs())

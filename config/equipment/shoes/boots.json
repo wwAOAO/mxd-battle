@@ -1,19 +1,19 @@
-﻿{
-  "swift_boots": {
-    "id": "swift_boots",
-    "name": "Swift Boots",
-    "slot": "shoes",
-    "stat": {
-      "agility": 8
-    },
-    "requirement": {
-      "agility": 8
-    },
-    "minLevel": 3,
-    "combatStat": {
-      "moveSpeed": 25,
-      "evasion": 3,
-      "attackActiveMs": -10
-    }
-  }
+{
+    "swift_boots":  {
+                        "id":  "swift_boots",
+                        "name":  "Swift Boots",
+                        "slot":  "shoes",
+                        "stat":  {
+                                     "agility":  8
+                                 },
+                        "requirement":  {
+                                            "agility":  8
+                                        },
+                        "minLevel":  3,
+                        "combatStat":  {
+                                           "moveSpeed":  25,
+                                           "evasion":  3,
+                                           "attackActiveMs":  -10
+                                       }
+                    }
 }

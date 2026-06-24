@@ -19,6 +19,14 @@ type Portal struct {
 	Target       Point  `json:"target"`
 }
 
+type MonsterSpawn struct {
+	ID        string  `json:"id"`
+	MonsterID string  `json:"monsterId"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	RespawnMS int32   `json:"respawnMs,omitempty"`
+}
+
 type Platform struct {
 	ID           string  `json:"id"`
 	X            float64 `json:"x"`

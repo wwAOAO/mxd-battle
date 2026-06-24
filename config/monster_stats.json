@@ -1,0 +1,42 @@
+{
+    "green_slime": {
+        "id": "green_slime",
+        "name": "Green Slime",
+        "width": 72,
+        "height": 56,
+        "hpMax": 60,
+        "expReward": 18,
+        "moveSpeed": 110,
+        "aggroRange": 260,
+        "respawnMs": 3500,
+        "combatStat": {
+            "physicalDefense": 2,
+            "magicDefense": 1,
+            "physicalAttackMin": 10,
+            "physicalAttackMax": 16
+        },
+        "attackRange": 70,
+        "attackHeight": 60,
+        "attackIntervalMs": 1200
+    },
+    "orange_mushroom": {
+        "id": "orange_mushroom",
+        "name": "Orange Mushroom",
+        "width": 74,
+        "height": 60,
+        "hpMax": 90,
+        "expReward": 28,
+        "moveSpeed": 90,
+        "aggroRange": 300,
+        "respawnMs": 5000,
+        "combatStat": {
+            "physicalDefense": 4,
+            "magicDefense": 3,
+            "physicalAttackMin": 14,
+            "physicalAttackMax": 22
+        },
+        "attackRange": 78,
+        "attackHeight": 66,
+        "attackIntervalMs": 1400
+    }
+}

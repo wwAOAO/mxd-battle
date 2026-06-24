@@ -301,6 +301,8 @@
           <button id="disconnect" class="secondary">Disconnect</button>
         </div>
 
+        <div id="status" class="status">Disconnected</div>
+
                 <section class="panel hud-panel" id="character-panel">
           <p class="panel-title">Character</p>
           <div id="hud-lines" class="hud-lines">
@@ -393,6 +395,7 @@
       };
       const players = new Map();
       const projectiles = new Map();
+      const monsters = new Map();
       const selfId =
         "role-" + Math.random().toString(16).slice(2, 8).padEnd(6, "0");
 
@@ -400,6 +403,8 @@
       const canvas = $("map");
       const ctx = canvas.getContext("2d");
       let socket = null;
+      let reconnectAfterReload = false;
+      let reconnectTimer = 0;
       const pressedKeys = new Set();
       const attacks = [];
       const damageTexts = [];
@@ -434,33 +439,53 @@
       }
 
       function connect() {
-        if (socket && socket.readyState === WebSocket.OPEN) return;
+        if (
+          socket &&
+          (socket.readyState === WebSocket.OPEN ||
+            socket.readyState === WebSocket.CONNECTING)
+        ) {
+          return;
+        }
 
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = 0;
         const params = new URLSearchParams({
           room: $("room").value,
           player: $("player").value.trim(),
           name: $("name").value.trim(),
           gender: $("gender").value,
         });
-        socket = new WebSocket(`ws://${location.host}/ws?${params}`);
+        const currentSocket = new WebSocket(`ws://${location.host}/ws?${params}`);
+        socket = currentSocket;
 
-        socket.addEventListener("open", () => {
+        currentSocket.addEventListener("open", () => {
+          if (socket !== currentSocket) return;
+          reconnectAfterReload = false;
           setStatus(`Connected to room ${$("room").value}`, true);
           log("connected");
         });
 
-        socket.addEventListener("message", (event) => {
+        currentSocket.addEventListener("message", (event) => {
+          if (socket !== currentSocket) return;
           const payload = JSON.parse(event.data);
           applyEvent(payload);
           log(payload.type, payload);
         });
 
-        socket.addEventListener("close", () => {
+        currentSocket.addEventListener("close", () => {
+          if (socket !== currentSocket) return;
+          socket = null;
+          if (reconnectAfterReload) {
+            setStatus(`Room ${$("room").value} reloaded, reconnecting...`, false);
+            reconnectTimer = window.setTimeout(connect, 500);
+            return;
+          }
           setStatus("Disconnected", false);
           log("closed");
         });
 
-        socket.addEventListener("error", () => {
+        currentSocket.addEventListener("error", () => {
+          if (socket !== currentSocket) return;
           setStatus("Connection error", false);
           log("error");
         });
@@ -521,8 +546,12 @@
       }
 
       function disconnect() {
+        reconnectAfterReload = false;
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = 0;
         if (socket) socket.close();
         socket = null;
+        setStatus("Disconnected", false);
       }
 
       function jump() {
@@ -582,6 +611,10 @@
       }
 
       function applyEvent(event) {
+        if (event.type === "room_reloaded") {
+          handleRoomReloaded(event);
+          return;
+        }
         if (event.type === "snapshot" && event.state) {
           world.id = event.state.map.id;
           world.width = event.state.map.width;
@@ -593,6 +626,7 @@
           world.walls = event.state.map.walls || [];
           world.ladders = event.state.map.ladders || [];
           world.portals = event.state.map.portals || [];
+          world.monsterSpawns = event.state.map.monsterSpawns || [];
           log("map geometry", {
             room: event.state.id,
             terrain: world.terrain.length,
@@ -603,9 +637,13 @@
           });
           $("room").value = event.state.id;
           players.clear();
+          monsters.clear();
           projectiles.clear();
           Object.values(event.state.players).forEach((player) => {
             players.set(player.id, withDisplayPosition(player));
+          });
+          Object.values(event.state.monsters || {}).forEach((monster) => {
+            monsters.set(monster.id, withDisplayMonster(monster));
           });
           Object.values(event.state.projectiles || {}).forEach((projectile) => {
             projectiles.set(projectile.id, withDisplayProjectile(projectile));
@@ -618,6 +656,10 @@
           lastEquipFailures = Array.isArray(event.equipResult.failures)
             ? event.equipResult.failures
             : [];
+        }
+        if (event.monster) {
+          const previousMonster = monsters.get(event.monster.id);
+          monsters.set(event.monster.id, withDisplayMonster(event.monster, previousMonster));
         }
         if (event.player) {
           const previous = players.get(event.player.id);
@@ -635,7 +677,7 @@
           renderSelfHud();
           }
         }
-        if (event.type === "player_attacked" && event.attack) {
+        if ((event.type === "player_attacked" || event.type === "monster_attacked") && event.attack) {
           attacks.push({
             ...event.attack,
             expiresAt: performance.now() + 180,
@@ -669,14 +711,36 @@
         if (event.type === "player_left") players.delete(event.playerId);
       }
 
+      function handleRoomReloaded(event) {
+        const room = event.room || $("room").value;
+        if (room) $("room").value = room;
+        players.clear();
+        monsters.clear();
+        projectiles.clear();
+        attacks.length = 0;
+        damageTexts.length = 0;
+        lastInputX = 0;
+        lastInputY = 0;
+        pressedKeys.clear();
+        renderSelfHud();
+        reconnectAfterReload = true;
+        setStatus(`Room ${room} reloaded, reconnecting...`, false);
+        log("room reloaded, reconnecting", event);
+        if (socket) socket.close();
+        else reconnectTimer = window.setTimeout(connect, 500);
+      }
       function addDamageText(attack) {
         if (!attack.targetId || !attack.outcome || !attack.outcome.isHit)
           return;
 
         const now = performance.now();
         const self = $("player").value.trim();
-        const target = players.get(attack.targetId);
-        const attacker = players.get(attack.attackerId);
+        const target = attack.targetType === "monster"
+          ? monsters.get(attack.targetId)
+          : players.get(attack.targetId);
+        const attacker = attack.targetType === "player"
+          ? monsters.get(attack.attackerId) || players.get(attack.attackerId)
+          : players.get(attack.attackerId) || monsters.get(attack.attackerId);
         const anchor = target || attacker;
         if (!anchor) return;
 
@@ -704,6 +768,7 @@
         addDamageText({
           attackerId: skill.casterId,
           targetId: skill.targetId,
+          targetType: skill.targetType,
           outcome: skill.outcome,
         });
       }
@@ -1219,6 +1284,14 @@
         return { ...player, displayX: player.x, displayY: player.y };
       }
 
+      function withDisplayMonster(monster, previous) {
+        return {
+          ...monster,
+          displayX: previous ? previous.displayX : monster.x,
+          displayY: previous ? previous.displayY : monster.y,
+        };
+      }
+
       function withDisplayProjectile(projectile, previous) {
         return {
           ...projectile,
@@ -1236,6 +1309,15 @@
         }
       }
 
+      function smoothMonsters(dt) {
+        const stiffness = 18;
+        const t = 1 - Math.exp(-stiffness * dt);
+        for (const monster of monsters.values()) {
+          monster.displayX += (monster.x - monster.displayX) * t;
+          monster.displayY += (monster.y - monster.displayY) * t;
+        }
+      }
+
       function smoothProjectiles(dt) {
         const stiffness = 30;
         const t = 1 - Math.exp(-stiffness * dt);
@@ -1249,6 +1331,7 @@
         const dt = Math.min((now - lastFrameAt) / 1000, 0.05);
         lastFrameAt = now;
         smoothPlayers(dt);
+        smoothMonsters(dt);
         smoothProjectiles(dt);
 
         const scale = Math.min(
@@ -1390,6 +1473,22 @@
 
         drawAttackAreas(offsetX, offsetY, scale);
         drawProjectiles(offsetX, offsetY, scale);
+        for (const monster of monsters.values()) {
+          if (monster.alive === false) continue;
+          const x = offsetX + monster.displayX * scale;
+          const y = offsetY + monster.displayY * scale;
+          const width = (monster.width || 72) * scale;
+          const height = (monster.height || 56) * scale;
+
+          ctx.fillStyle = "#22c55e";
+          ctx.fillRect(x - width / 2, y - height, width, height);
+          ctx.strokeStyle = "#166534";
+          ctx.strokeRect(x - width / 2, y - height, width, height);
+
+          ctx.fillStyle = "#172033";
+          ctx.font = "12px system-ui";
+          ctx.fillText(`${monster.name || monster.monsterId} ${monster.hp}/${monster.hpMax}`, x + width / 2 + 6, y - height + 12);
+        }
 
         for (const player of players.values()) {
           const x = offsetX + player.displayX * scale;
@@ -1673,8 +1772,3 @@
     </script>
   </body>
 </html>
-
-
-
-
-

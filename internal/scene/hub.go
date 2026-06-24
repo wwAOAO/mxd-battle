@@ -18,6 +18,8 @@ const (
 	RoomY = "Treasure_Island.city"
 )
 
+const defaultMonsterAggroDuration = 5 * time.Second
+
 var (
 	ErrInvalidRoom      = errors.New("room is not configured")
 	ErrPlayerIDRequired = errors.New("player id is required")
@@ -35,6 +37,7 @@ type RoomState struct {
 	ID          string                `json:"id"`
 	Map         world.MapConfig       `json:"map"`
 	Players     map[string]Player     `json:"players"`
+	Monsters    map[string]Monster    `json:"monsters"`
 	Projectiles map[string]Projectile `json:"projectiles"`
 }
 
@@ -43,6 +46,8 @@ type ServerEvent struct {
 	Room         string                    `json:"room,omitempty"`
 	Player       *Player                   `json:"player,omitempty"`
 	PlayerID     string                    `json:"playerId,omitempty"`
+	Monster      *Monster                  `json:"monster,omitempty"`
+	MonsterID    string                    `json:"monsterId,omitempty"`
 	Attack       *AttackResult             `json:"attack,omitempty"`
 	Skill        *SkillResult              `json:"skill,omitempty"`
 	Projectile   *Projectile               `json:"projectile,omitempty"`
@@ -54,37 +59,44 @@ type ServerEvent struct {
 }
 
 type AttackResult struct {
-	AttackerID string               `json:"attackerId"`
-	TargetID   string               `json:"targetId,omitempty"`
-	Area       world.Rect           `json:"area"`
-	Outcome    combat.AttackOutcome `json:"outcome"`
+	AttackerID     string               `json:"attackerId"`
+	TargetID       string               `json:"targetId,omitempty"`
+	TargetType     string               `json:"targetType,omitempty"`
+	Area           world.Rect           `json:"area"`
+	Outcome        combat.AttackOutcome `json:"outcome"`
+	ExpReward      int32                `json:"expReward,omitempty"`
+	DefeatedTarget bool                 `json:"defeatedTarget,omitempty"`
 }
 
 type SkillResult struct {
-	SkillID      string               `json:"skillId"`
-	CasterID     string               `json:"casterId"`
-	TargetID     string               `json:"targetId,omitempty"`
-	ProjectileID string               `json:"projectileId,omitempty"`
-	Area         world.Rect           `json:"area"`
-	MPCost       int32                `json:"mpCost"`
-	CooldownMS   int32                `json:"cooldownMs"`
-	StartupMS    int32                `json:"startupMs"`
-	ActiveMS     int32                `json:"activeMs"`
-	RecoveryMS   int32                `json:"recoveryMs"`
-	IntervalMS   int32                `json:"intervalMs"`
-	Outcome      combat.AttackOutcome `json:"outcome"`
+	SkillID        string               `json:"skillId"`
+	CasterID       string               `json:"casterId"`
+	TargetID       string               `json:"targetId,omitempty"`
+	TargetType     string               `json:"targetType,omitempty"`
+	ProjectileID   string               `json:"projectileId,omitempty"`
+	Area           world.Rect           `json:"area"`
+	MPCost         int32                `json:"mpCost"`
+	CooldownMS     int32                `json:"cooldownMs"`
+	StartupMS      int32                `json:"startupMs"`
+	ActiveMS       int32                `json:"activeMs"`
+	RecoveryMS     int32                `json:"recoveryMs"`
+	IntervalMS     int32                `json:"intervalMs"`
+	ExpReward      int32                `json:"expReward,omitempty"`
+	DefeatedTarget bool                 `json:"defeatedTarget,omitempty"`
+	Outcome        combat.AttackOutcome `json:"outcome"`
 }
 
 type Hub struct {
 	logger    *slog.Logger
 	publisher EventPublisher
 
-	mu         sync.RWMutex
-	rooms      map[string]*room
-	players    map[string]string
-	jobs       combat.JobStatConfigs
-	skills     combat.SkillConfigs
-	equipments combat.EquipmentConfigs
+	mu           sync.RWMutex
+	rooms        map[string]*room
+	players      map[string]string
+	jobs         combat.JobStatConfigs
+	skills       combat.SkillConfigs
+	equipments   combat.EquipmentConfigs
+	monsterStats combat.MonsterStatConfigs
 }
 
 func NewHub(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig) (*Hub, error) {
@@ -96,6 +108,10 @@ func NewHubWithJobs(logger *slog.Logger, publisher EventPublisher, maps map[stri
 }
 
 func NewHubWithJobsAndEquipment(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs, skillConfigs ...combat.SkillConfigs) (*Hub, error) {
+	return NewHubWithJobsEquipmentAndMonsters(logger, publisher, maps, jobs, equipmentConfigs, nil, skillConfigs...)
+}
+
+func NewHubWithJobsEquipmentAndMonsters(logger *slog.Logger, publisher EventPublisher, maps map[string]world.MapConfig, jobs combat.JobStatConfigs, equipmentConfigs combat.EquipmentConfigs, monsterConfigs combat.MonsterStatConfigs, skillConfigs ...combat.SkillConfigs) (*Hub, error) {
 	maps = world.NormalizeRoomMaps(maps)
 	if err := world.ValidateRoomMaps(maps); err != nil {
 		return nil, err
@@ -108,19 +124,30 @@ func NewHubWithJobsAndEquipment(logger *slog.Logger, publisher EventPublisher, m
 		skills = skillConfigs[0]
 	}
 
+	now := time.Now().UTC()
 	rooms := make(map[string]*room, len(maps))
 	for roomID, mapDef := range maps {
-		rooms[roomID] = newRoom(roomID, mapDef)
+		room := newRoom(roomID, mapDef)
+		for _, spawn := range mapDef.MonsterSpawns {
+			config, ok := monsterConfigs[spawn.MonsterID]
+			if !ok {
+				continue
+			}
+			monster := spawnMonster(spawn, config, room, now)
+			room.monsters[monster.ID] = monster
+		}
+		rooms[roomID] = room
 	}
 
 	return &Hub{
-		logger:     logger,
-		publisher:  publisher,
-		rooms:      rooms,
-		players:    make(map[string]string),
-		jobs:       jobs,
-		skills:     skills,
-		equipments: combat.NormalizeEquipmentConfigs(equipmentConfigs),
+		logger:       logger,
+		publisher:    publisher,
+		rooms:        rooms,
+		players:      make(map[string]string),
+		jobs:         jobs,
+		skills:       skills,
+		equipments:   combat.NormalizeEquipmentConfigs(equipmentConfigs),
+		monsterStats: monsterConfigs,
 	}, nil
 }
 
@@ -158,6 +185,17 @@ func (h *Hub) EquipmentConfigs() combat.EquipmentConfigs {
 	return configs
 }
 
+func (h *Hub) MonsterStatConfigs() combat.MonsterStatConfigs {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	configs := make(combat.MonsterStatConfigs, len(h.monsterStats))
+	for id, config := range h.monsterStats {
+		configs[id] = config
+	}
+	return configs
+}
+
 func (h *Hub) DefaultRoom() string {
 	rooms := h.Rooms()
 	if len(rooms) == 0 {
@@ -166,8 +204,53 @@ func (h *Hub) DefaultRoom() string {
 	return rooms[0]
 }
 
+func (h *Hub) ReloadRooms(maps map[string]world.MapConfig, roomIDs []string) ([]string, int, error) {
+	maps = world.NormalizeRoomMaps(maps)
+	if err := world.ValidateRoomMaps(maps); err != nil {
+		return nil, 0, err
+	}
+
+	now := time.Now().UTC()
+	reloaded := make([]string, 0, len(roomIDs))
+	kickedPeers := make(map[string]Peer)
+	kickedPlayerRoom := make(map[string]string)
+
+	h.mu.Lock()
+	for _, roomID := range roomIDs {
+		mapDef, ok := maps[roomID]
+		if !ok {
+			continue
+		}
+		oldRoom := h.rooms[roomID]
+		if oldRoom != nil {
+			for playerID, peer := range oldRoom.peers {
+				kickedPeers[playerID] = peer
+				kickedPlayerRoom[playerID] = roomID
+				delete(h.players, playerID)
+			}
+		}
+
+		room := newRoom(roomID, mapDef)
+		for _, spawn := range mapDef.MonsterSpawns {
+			config, ok := h.monsterStats[spawn.MonsterID]
+			if !ok {
+				continue
+			}
+			monster := spawnMonster(spawn, config, room, now)
+			room.monsters[monster.ID] = monster
+		}
+		h.rooms[roomID] = room
+		reloaded = append(reloaded, roomID)
+	}
+	h.mu.Unlock()
+
+	for playerID, peer := range kickedPeers {
+		peer.Send(ServerEvent{Type: "room_reloaded", Room: kickedPlayerRoom[playerID], PlayerID: playerID, Message: "room map reloaded", CreatedAt: now})
+	}
+	return reloaded, len(kickedPeers), nil
+}
+
 func (h *Hub) StartPhysics(ctx context.Context) {
-	// Physics runs at 20 ticks per second.
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -225,27 +308,11 @@ func (h *Hub) Join(roomID string, player Player, peer Peer) (RoomState, error) {
 	h.mu.Unlock()
 
 	if hadPrevious && previousRoom != nil && previousRoom.id != currentRoom.id {
-		h.broadcast(leaveRecipients, ServerEvent{
-			Type:      "player_left",
-			Room:      previousRoom.id,
-			PlayerID:  previousPlayer.ID,
-			CreatedAt: now,
-		})
+		h.broadcast(leaveRecipients, ServerEvent{Type: "player_left", Room: previousRoom.id, PlayerID: previousPlayer.ID, CreatedAt: now})
 	}
 
-	h.broadcast(joinRecipients, ServerEvent{
-		Type:      "player_joined",
-		Room:      roomID,
-		Player:    &player,
-		CreatedAt: now,
-	})
-	h.publish("battle.events.world.player_joined", ServerEvent{
-		Type:      "player_joined",
-		Room:      roomID,
-		Player:    &player,
-		CreatedAt: now,
-	})
-
+	h.broadcast(joinRecipients, ServerEvent{Type: "player_joined", Room: roomID, Player: &player, CreatedAt: now})
+	h.publish("battle.events.world.player_joined", ServerEvent{Type: "player_joined", Room: roomID, Player: &player, CreatedAt: now})
 	return state, nil
 }
 
@@ -262,19 +329,13 @@ func (h *Hub) Move(playerID string, x float64, y float64) (Player, bool) {
 	player := currentRoom.players[playerID]
 	player.X = x
 	player.UpdatedAt = now
-
 	transition := resolvePlayerMovementFromWithJobs(currentRoom, player, currentRoom.players[playerID].X, player.Y, h.jobs, h.equipments, time.Time{})
 	currentRoom.players[playerID] = transition.Player
 	recipients := roomPeersExcept(currentRoom, playerID)
 	h.mu.Unlock()
 
 	player = transition.Player
-	event := ServerEvent{
-		Type:      "player_moved",
-		Room:      currentRoom.id,
-		Player:    &player,
-		CreatedAt: now,
-	}
+	event := ServerEvent{Type: "player_moved", Room: currentRoom.id, Player: &player, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_moved", event)
 	return player, true
@@ -297,7 +358,6 @@ func (h *Hub) UsePortal(playerID string) (Player, bool) {
 		h.mu.Unlock()
 		return player, false
 	}
-
 	delete(currentRoom.players, playerID)
 	delete(currentRoom.peers, playerID)
 
@@ -322,27 +382,11 @@ func (h *Hub) UsePortal(playerID string) (Player, bool) {
 	state := roomSnapshot(targetRoom)
 	h.mu.Unlock()
 
-	leftEvent := ServerEvent{
-		Type:      "player_left",
-		Room:      currentRoom.id,
-		PlayerID:  playerID,
-		CreatedAt: now,
-	}
-	joinedEvent := ServerEvent{
-		Type:      "player_joined",
-		Room:      targetRoom.id,
-		Player:    &player,
-		CreatedAt: now,
-	}
-
+	leftEvent := ServerEvent{Type: "player_left", Room: currentRoom.id, PlayerID: playerID, CreatedAt: now}
+	joinedEvent := ServerEvent{Type: "player_joined", Room: targetRoom.id, Player: &player, CreatedAt: now}
 	h.broadcast(oldRecipients, leftEvent)
 	h.broadcast(newRecipients, joinedEvent)
-	peer.Send(ServerEvent{
-		Type:      "snapshot",
-		Room:      targetRoom.id,
-		State:     &state,
-		CreatedAt: now,
-	})
+	peer.Send(ServerEvent{Type: "snapshot", Room: targetRoom.id, State: &state, CreatedAt: now})
 	h.publish("battle.events.world.player_left", leftEvent)
 	h.publish("battle.events.world.player_joined", joinedEvent)
 	return player, true
@@ -371,12 +415,7 @@ func (h *Hub) Jump(playerID string) (Player, bool) {
 	recipients := roomPeersExcept(room, playerID)
 	h.mu.Unlock()
 
-	event := ServerEvent{
-		Type:      "player_moved",
-		Room:      roomID,
-		Player:    &player,
-		CreatedAt: now,
-	}
+	event := ServerEvent{Type: "player_moved", Room: roomID, Player: &player, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_moved", event)
 	return player, true
@@ -404,12 +443,7 @@ func (h *Hub) Drop(playerID string) (Player, bool) {
 	recipients := roomPeersExcept(room, playerID)
 	h.mu.Unlock()
 
-	event := ServerEvent{
-		Type:      "player_moved",
-		Room:      roomID,
-		Player:    &player,
-		CreatedAt: now,
-	}
+	event := ServerEvent{Type: "player_moved", Room: roomID, Player: &player, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_moved", event)
 	return player, true
@@ -471,12 +505,7 @@ func (h *Hub) SetPrimaryStat(playerID string, stat PlayerStat) (Player, bool) {
 	recipients := roomPeersExcept(room, playerID)
 	h.mu.Unlock()
 
-	event := ServerEvent{
-		Type:      "player_stat_updated",
-		Room:      roomID,
-		Player:    &player,
-		CreatedAt: now,
-	}
+	event := ServerEvent{Type: "player_stat_updated", Room: roomID, Player: &player, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_stat_updated", event)
 	return player, true
@@ -503,13 +532,7 @@ func (h *Hub) SetEquipment(playerID string, equipmentIDs []string) (Player, Equi
 	recipients := roomPeersExcept(room, playerID)
 	h.mu.Unlock()
 
-	event := ServerEvent{
-		Type:        "player_stat_updated",
-		Room:        roomID,
-		Player:      &player,
-		EquipResult: &selection,
-		CreatedAt:   now,
-	}
+	event := ServerEvent{Type: "player_stat_updated", Room: roomID, Player: &player, EquipResult: &selection, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_stat_updated", event)
 	return player, selection, true
@@ -543,12 +566,11 @@ func (h *Hub) normalAttackAt(playerID string, now time.Time) (AttackResult, Play
 	room.players[playerID] = attacker
 
 	area := normalAttackArea(attacker)
-	result := AttackResult{
-		AttackerID: playerID,
-		Area:       area,
-	}
+	result := AttackResult{AttackerID: playerID, Area: area}
 
 	var target Player
+	var targetMonster Monster
+	var hasMonster bool
 	for targetID, candidate := range room.players {
 		if targetID == playerID {
 			continue
@@ -563,7 +585,35 @@ func (h *Hub) normalAttackAt(playerID string, now time.Time) (AttackResult, Play
 			room.players[targetID] = candidate
 			target = candidate
 			result.TargetID = targetID
+			result.TargetType = "player"
 			result.Outcome = outcome
+			break
+		}
+	}
+	if result.TargetID == "" {
+		for monsterID, monster := range room.monsters {
+			if !monster.Alive || !monsterIntersectsRect(monster, area) {
+				continue
+			}
+			outcome := combat.NormalAttack(attacker.CombatStat, monster.CombatStat)
+			monster.HP = maxInt32(0, monster.HP-outcome.Damage)
+			monster.AggroTargetID = playerID
+			monster.AggroUntil = now.Add(defaultMonsterAggroDuration)
+			monster.UpdatedAt = now
+			result.TargetID = monsterID
+			result.TargetType = "monster"
+			result.Outcome = outcome
+			if monster.HP == 0 {
+				monster = defeatMonster(monster, now)
+				result.ExpReward = monster.ExpReward
+				result.DefeatedTarget = true
+				attacker.Exp = addExpString(attacker.Exp, monster.ExpReward)
+				attacker.UpdatedAt = now
+				room.players[playerID] = attacker
+			}
+			room.monsters[monsterID] = monster
+			targetMonster = monster
+			hasMonster = true
 			break
 		}
 	}
@@ -571,14 +621,13 @@ func (h *Hub) normalAttackAt(playerID string, now time.Time) (AttackResult, Play
 	recipients := roomPeers(room)
 	h.mu.Unlock()
 
-	event := ServerEvent{
-		Type:      "player_attacked",
-		Room:      roomID,
-		Attack:    &result,
-		CreatedAt: now,
-	}
-	if result.TargetID != "" {
+	event := ServerEvent{Type: "player_attacked", Room: roomID, Attack: &result, CreatedAt: now}
+	if result.TargetType == "player" && result.TargetID != "" {
 		event.Player = &target
+	}
+	if result.TargetType == "monster" && hasMonster {
+		event.Monster = &targetMonster
+		event.Player = &attacker
 	}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_attacked", event)
@@ -631,43 +680,20 @@ func (h *Hub) castSkillAt(playerID string, skillID string, now time.Time) (Skill
 	caster.UpdatedAt = now
 	room.players[playerID] = caster
 
-	pending := PendingSkill{
-		ID:        pendingSkillID(playerID, skillID, now),
-		CasterID:  playerID,
-		SkillID:   skillID,
-		Skill:     skill,
-		Timing:    timing,
-		ReadyAt:   now.Add(combat.SkillStartup(skill, caster.CombatStat)),
-		CreatedAt: now,
-	}
+	pending := PendingSkill{ID: pendingSkillID(playerID, skillID, now), CasterID: playerID, SkillID: skillID, Skill: skill, Timing: timing, ReadyAt: now.Add(combat.SkillStartup(skill, caster.CombatStat)), CreatedAt: now}
 	room.pendingSkills[pending.ID] = pending
 
-	result := SkillResult{
-		SkillID:    skillID,
-		CasterID:   playerID,
-		MPCost:     skill.MPCost,
-		CooldownMS: skill.CooldownMS,
-		StartupMS:  timing.StartupMS,
-		ActiveMS:   timing.ActiveMS,
-		RecoveryMS: timing.RecoveryMS,
-		IntervalMS: timing.IntervalMS,
-	}
-
+	result := SkillResult{SkillID: skillID, CasterID: playerID, MPCost: skill.MPCost, CooldownMS: skill.CooldownMS, StartupMS: timing.StartupMS, ActiveMS: timing.ActiveMS, RecoveryMS: timing.RecoveryMS, IntervalMS: timing.IntervalMS}
 	recipients := roomPeers(room)
 	h.mu.Unlock()
 
 	casterEvent := caster
-	event := ServerEvent{
-		Type:      "player_skill_started",
-		Room:      roomID,
-		Player:    &casterEvent,
-		Skill:     &result,
-		CreatedAt: now,
-	}
+	event := ServerEvent{Type: "player_skill_started", Room: roomID, Player: &casterEvent, Skill: &result, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_skill_started", event)
 	return result, Player{}, true
 }
+
 func (h *Hub) StepPhysics(now time.Time, dt float64) {
 	if dt <= 0 || dt > 0.25 {
 		return
@@ -691,8 +717,7 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			player = NormalizePlayerStatWithJobs(player, h.jobs)
 			player = applySnapshotStat(player, h.jobs, h.equipments)
 			room.players[playerID] = player
-			if player.Stat.Final.HP != previousPlayer.Stat.Final.HP ||
-				player.Stat.Final.MP != previousPlayer.Stat.Final.MP {
+			if player.Stat.Final.HP != previousPlayer.Stat.Final.HP || player.Stat.Final.MP != previousPlayer.Stat.Final.MP {
 				recovered = true
 				player.UpdatedAt = now
 				room.players[playerID] = player
@@ -700,17 +725,8 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 
 			if player.OnGround && !player.OnLadder && player.VY == 0 && player.InputX == 0 && player.InputY == 0 {
 				if recovered {
-					recipients := roomPeers(room)
 					playerCopy := player
-					queued = append(queued, queuedEvent{
-						recipients: recipients,
-						event: ServerEvent{
-							Type:      "player_recovered",
-							Room:      room.id,
-							Player:    &playerCopy,
-							CreatedAt: now,
-						},
-					})
+					queued = append(queued, queuedEvent{recipients: roomPeers(room), event: ServerEvent{Type: "player_recovered", Room: room.id, Player: &playerCopy, CreatedAt: now}})
 				}
 				continue
 			}
@@ -749,19 +765,71 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			player.UpdatedAt = now
 			player = resolvePlayerMovementFromWithJobs(room, player, previousX, previousY, h.jobs, h.equipments, now).Player
 			room.players[playerID] = player
-
-			recipients := roomPeers(room)
 			playerCopy := player
-			queued = append(queued, queuedEvent{
-				recipients: recipients,
-				event: ServerEvent{
-					Type:      "player_moved",
-					Room:      room.id,
-					Player:    &playerCopy,
-					CreatedAt: now,
-				},
-			})
+			queued = append(queued, queuedEvent{recipients: roomPeers(room), event: ServerEvent{Type: "player_moved", Room: room.id, Player: &playerCopy, CreatedAt: now}})
 		}
+
+		for monsterID, monster := range room.monsters {
+			if !monster.Alive {
+				if !monster.RespawnAt.IsZero() && !now.Before(monster.RespawnAt) {
+					monster = respawnMonster(room, monster, now)
+					room.monsters[monsterID] = monster
+					monsterCopy := monster
+					queued = append(queued, queuedEvent{recipients: roomPeers(room), event: ServerEvent{Type: "monster_respawned", Room: room.id, Monster: &monsterCopy, CreatedAt: now}})
+				}
+				continue
+			}
+
+			monster = expireMonsterAggro(monster, now)
+
+			room.monsters[monsterID] = monster
+
+			target, ok := nearestMonsterTarget(monster, room.players, now)
+			if !ok {
+				continue
+			}
+			direction := 0.0
+			if target.X > monster.X+4 {
+				direction = 1
+			} else if target.X < monster.X-4 {
+				direction = -1
+			}
+			monster.FacingX = directionOr(direction, monster.FacingX)
+			attackArea := monsterAttackArea(monster)
+			if monsterCanHitPlayer(monster, target) && combat.CanNormalAttack(now, monster.LastAttackAt, monster.CombatStat) {
+				outcome := combat.NormalAttack(monster.CombatStat, target.CombatStat)
+				target.Stat.Base.HP = maxInt32(0, target.Stat.Base.HP-outcome.Damage)
+				target = ApplyEquipmentStats(target, h.equipments)
+				target = NormalizePlayerStatWithJobs(target, h.jobs)
+				target = applySnapshotStat(target, h.jobs, h.equipments)
+				target.UpdatedAt = now
+				room.players[target.ID] = target
+				monster.LastAttackAt = now
+				monster.UpdatedAt = now
+				room.monsters[monsterID] = monster
+				monsterCopy := monster
+				targetCopy := target
+				attack := AttackResult{AttackerID: monster.ID, TargetID: target.ID, TargetType: "player", Area: attackArea, Outcome: outcome}
+				queued = append(queued, queuedEvent{recipients: roomPeers(room), event: ServerEvent{Type: "monster_attacked", Room: room.id, Monster: &monsterCopy, Player: &targetCopy, Attack: &attack, CreatedAt: now}})
+				continue
+			}
+			previousX := monster.X
+			previousY := monster.Y
+			direction = 0.0
+			if target.X > monster.X+4 {
+				direction = 1
+			} else if target.X < monster.X-4 {
+				direction = -1
+			}
+			monster.FacingX = directionOr(direction, monster.FacingX)
+			monster.X += direction * monster.MoveSpeed * dt
+			monster = moveMonster(room, monster, previousX, previousY, now)
+			monster.UpdatedAt = now
+			room.monsters[monsterID] = monster
+			monsterCopy := monster
+			queued = append(queued, queuedEvent{recipients: roomPeers(room), event: ServerEvent{Type: "monster_moved", Room: room.id, Monster: &monsterCopy, CreatedAt: now}})
+		}
+
 		for pendingID, pending := range room.pendingSkills {
 			if now.Before(pending.ReadyAt) {
 				continue
@@ -775,31 +843,9 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			projectile := newProjectile(caster, pending.Skill, now)
 			room.projectiles[projectile.ID] = projectile
 			area := projectileRect(projectile)
-			result := SkillResult{
-				SkillID:      pending.SkillID,
-				CasterID:     pending.CasterID,
-				ProjectileID: projectile.ID,
-				Area:         area,
-				MPCost:       pending.Skill.MPCost,
-				CooldownMS:   pending.Skill.CooldownMS,
-				StartupMS:    pending.Timing.StartupMS,
-				ActiveMS:     pending.Timing.ActiveMS,
-				RecoveryMS:   pending.Timing.RecoveryMS,
-				IntervalMS:   pending.Timing.IntervalMS,
-			}
-			recipients := roomPeers(room)
+			result := SkillResult{SkillID: pending.SkillID, CasterID: pending.CasterID, ProjectileID: projectile.ID, Area: area, MPCost: pending.Skill.MPCost, CooldownMS: pending.Skill.CooldownMS, StartupMS: pending.Timing.StartupMS, ActiveMS: pending.Timing.ActiveMS, RecoveryMS: pending.Timing.RecoveryMS, IntervalMS: pending.Timing.IntervalMS}
 			projectileCopy := projectile
-			queued = append(queued, queuedEvent{
-				recipients: recipients,
-				event: ServerEvent{
-					Type:       "player_skill_cast",
-					Room:       room.id,
-					Player:     &caster,
-					Skill:      &result,
-					Projectile: &projectileCopy,
-					CreatedAt:  now,
-				},
-			})
+			queued = append(queued, queuedEvent{recipients: roomPeers(room), event: ServerEvent{Type: "player_skill_cast", Room: room.id, Player: &caster, Skill: &result, Projectile: &projectileCopy, CreatedAt: now}})
 		}
 
 		for projectileID, projectile := range room.projectiles {
@@ -808,20 +854,17 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 			projectile.Distance += absFloat64(projectile.X - previousX)
 			room.projectiles[projectileID] = projectile
 
-			recipients := roomPeers(room)
 			projectileCopy := projectile
-			queued = append(queued, queuedEvent{
-				recipients: recipients,
-				event: ServerEvent{
-					Type:       "projectile_moved",
-					Room:       room.id,
-					Projectile: &projectileCopy,
-					CreatedAt:  now,
-				},
-			})
+			recipients := roomPeers(room)
+			queued = append(queued, queuedEvent{recipients: recipients, event: ServerEvent{Type: "projectile_moved", Room: room.id, Projectile: &projectileCopy, CreatedAt: now}})
 
-			var hitTarget Player
+			var hitPlayer Player
+			var hitMonster Monster
+			var hasPlayerHit bool
+			var hasMonsterHit bool
 			var hitTargetID string
+			var hitTargetType string
+			var result SkillResult
 			for targetID, candidate := range room.players {
 				if targetID == projectile.CasterID {
 					continue
@@ -834,44 +877,64 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 					candidate = applySnapshotStat(candidate, h.jobs, h.equipments)
 					candidate.UpdatedAt = now
 					room.players[targetID] = candidate
-					hitTarget = candidate
+					hitPlayer = candidate
+					hasPlayerHit = true
 					hitTargetID = targetID
-					result := SkillResult{
-						SkillID:      projectile.SkillID,
-						CasterID:     projectile.CasterID,
-						TargetID:     targetID,
-						ProjectileID: projectile.ID,
-						Area:         projectileRect(projectile),
-						MPCost:       projectile.Skill.MPCost,
-						CooldownMS:   projectile.Skill.CooldownMS,
-						Outcome:      outcome,
+					hitTargetType = "player"
+					result = SkillResult{SkillID: projectile.SkillID, CasterID: projectile.CasterID, TargetID: targetID, TargetType: "player", ProjectileID: projectile.ID, Area: projectileRect(projectile), MPCost: projectile.Skill.MPCost, CooldownMS: projectile.Skill.CooldownMS, Outcome: outcome}
+					break
+				}
+			}
+			if hitTargetID == "" {
+				for monsterID, monster := range room.monsters {
+					if !monster.Alive || !monsterIntersectsRect(monster, projectileRect(projectile)) {
+						continue
 					}
-					queued = append(queued, queuedEvent{
-						recipients: recipients,
-						event: ServerEvent{
-							Type:         "player_skill_hit",
-							Room:         room.id,
-							Player:       &hitTarget,
-							Skill:        &result,
-							ProjectileID: projectile.ID,
-							CreatedAt:    now,
-						},
-					})
+					outcome := combat.MagicSkillAttack(projectile.CasterStat, monster.CombatStat, projectile.Skill)
+					monster.HP = maxInt32(0, monster.HP-outcome.Damage)
+					monster.AggroTargetID = projectile.CasterID
+					monster.AggroUntil = now.Add(defaultMonsterAggroDuration)
+					monster.UpdatedAt = now
+					hitMonster = monster
+					hasMonsterHit = true
+					hitTargetID = monsterID
+					hitTargetType = "monster"
+					result = SkillResult{SkillID: projectile.SkillID, CasterID: projectile.CasterID, TargetID: monsterID, TargetType: "monster", ProjectileID: projectile.ID, Area: projectileRect(projectile), MPCost: projectile.Skill.MPCost, CooldownMS: projectile.Skill.CooldownMS, Outcome: outcome}
+					if monster.HP == 0 {
+						monster = defeatMonster(monster, now)
+						result.ExpReward = monster.ExpReward
+						result.DefeatedTarget = true
+						if caster, ok := room.players[projectile.CasterID]; ok {
+							caster.Exp = addExpString(caster.Exp, monster.ExpReward)
+							caster.UpdatedAt = now
+							room.players[projectile.CasterID] = caster
+							hitPlayer = caster
+							hasPlayerHit = true
+						}
+					}
+					room.monsters[monsterID] = monster
+					hitMonster = monster
 					break
 				}
 			}
 
+			if hitTargetID != "" {
+				event := ServerEvent{Type: "player_skill_hit", Room: room.id, Skill: &result, ProjectileID: projectile.ID, CreatedAt: now}
+				if hitTargetType == "player" && hasPlayerHit {
+					event.Player = &hitPlayer
+				}
+				if hitTargetType == "monster" && hasMonsterHit {
+					event.Monster = &hitMonster
+					if hasPlayerHit {
+						event.Player = &hitPlayer
+					}
+				}
+				queued = append(queued, queuedEvent{recipients: recipients, event: event})
+			}
+
 			if hitTargetID != "" || projectile.Distance >= projectile.MaxDistance {
 				delete(room.projectiles, projectileID)
-				queued = append(queued, queuedEvent{
-					recipients: recipients,
-					event: ServerEvent{
-						Type:         "projectile_removed",
-						Room:         room.id,
-						ProjectileID: projectileID,
-						CreatedAt:    now,
-					},
-				})
+				queued = append(queued, queuedEvent{recipients: recipients, event: ServerEvent{Type: "projectile_removed", Room: room.id, ProjectileID: projectileID, CreatedAt: now}})
 			}
 		}
 	}
@@ -880,6 +943,53 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 	for _, item := range queued {
 		h.broadcast(item.recipients, item.event)
 	}
+}
+
+func nearestMonsterTarget(monster Monster, players map[string]Player, now time.Time) (Player, bool) {
+	if monsterHasAggro(monster, now) {
+		if target, ok := players[monster.AggroTargetID]; ok {
+			return target, true
+		}
+	}
+
+	var selected Player
+	bestDistance := monster.AggroRange
+	found := false
+	for _, player := range players {
+		distance := absFloat64(player.X - monster.X)
+		if distance > bestDistance {
+			continue
+		}
+		if !found || distance < bestDistance {
+			selected = player
+			bestDistance = distance
+			found = true
+		}
+	}
+	return selected, found
+}
+
+func monsterHasAggro(monster Monster, now time.Time) bool {
+	return monster.AggroTargetID != "" && (monster.AggroUntil.IsZero() || now.Before(monster.AggroUntil))
+}
+
+func expireMonsterAggro(monster Monster, now time.Time) Monster {
+	if monster.AggroTargetID == "" || monster.AggroUntil.IsZero() || now.Before(monster.AggroUntil) {
+		return monster
+	}
+	monster.AggroTargetID = ""
+	monster.AggroUntil = time.Time{}
+	return monster
+}
+
+func directionOr(primary float64, fallback float64) float64 {
+	if primary != 0 {
+		return primary
+	}
+	if fallback != 0 {
+		return fallback
+	}
+	return 1
 }
 
 func (h *Hub) Leave(playerID string) {
@@ -898,12 +1008,7 @@ func (h *Hub) Leave(playerID string) {
 	recipients := roomPeersExcept(room, playerID)
 	h.mu.Unlock()
 
-	event := ServerEvent{
-		Type:      "player_left",
-		Room:      roomID,
-		PlayerID:  playerID,
-		CreatedAt: now,
-	}
+	event := ServerEvent{Type: "player_left", Room: roomID, PlayerID: playerID, CreatedAt: now}
 	h.broadcast(recipients, event)
 	h.publish("battle.events.world.player_left", event)
 }
@@ -928,14 +1033,17 @@ func (h *Hub) publish(subject string, event ServerEvent) {
 	if h.publisher == nil {
 		return
 	}
-
 	payload, err := json.Marshal(event)
 	if err != nil {
-		h.logger.Warn("failed to encode world event", "error", err)
+		if h.logger != nil {
+			h.logger.Warn("failed to encode world event", "error", err)
+		}
 		return
 	}
 	if err := h.publisher.PublishBattleEvent(subject, payload); err != nil {
-		h.logger.Warn("failed to publish world event", "subject", subject, "error", err)
+		if h.logger != nil {
+			h.logger.Warn("failed to publish world event", "subject", subject, "error", err)
+		}
 	}
 }
 

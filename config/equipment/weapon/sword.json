@@ -1,23 +1,25 @@
-﻿{
-  "bronze_sword": {
-    "id": "bronze_sword",
-    "name": "Bronze Sword",
-    "slot": "weapon_main",
-    "stat": {
-      "strength": 5,
-      "hpMax": 40
-    },
-    "requirement": {
-      "strength": 10
-    },
-    "minLevel": 5,
-    "allowedJobs": ["warrior"],
-    "combatStat": {
-      "physicalAttackMin": 7,
-      "physicalAttackMax": 12,
-      "attackStartupMs": -20,
-      "attackRecoveryMs": -30,
-      "attackIntervalMs": -50
-    }
-  }
+{
+    "bronze_sword":  {
+                         "id":  "bronze_sword",
+                         "name":  "Bronze Sword",
+                         "slot":  "weapon_main",
+                         "stat":  {
+                                      "strength":  5,
+                                      "hpMax":  40
+                                  },
+                         "requirement":  {
+                                             "strength":  10
+                                         },
+                         "minLevel":  5,
+                         "allowedJobs":  [
+                                             "warrior"
+                                         ],
+                         "combatStat":  {
+                                            "physicalAttackMin":  7,
+                                            "physicalAttackMax":  12,
+                                            "attackStartupMs":  -20,
+                                            "attackRecoveryMs":  -30,
+                                            "attackIntervalMs":  -50
+                                        }
+                     }
 }

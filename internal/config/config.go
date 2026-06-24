@@ -13,6 +13,7 @@ type Config struct {
 	JobStatsFile       string
 	SkillStatsFile     string
 	EquipmentStatsFile string
+	MonsterStatsFile   string
 }
 
 func Load() Config {
@@ -27,6 +28,7 @@ func Load() Config {
 		JobStatsFile:       getEnv("JOB_STATS_FILE", "config/job_stats.json"),
 		SkillStatsFile:     getEnv("SKILL_STATS_FILE", "config/skill_stats.json"),
 		EquipmentStatsFile: getEnv("EQUIPMENT_STATS_FILE", "config/equipment"),
+		MonsterStatsFile:   getEnv("MONSTER_STATS_FILE", "config/monster_stats.json"),
 	}
 }
 
