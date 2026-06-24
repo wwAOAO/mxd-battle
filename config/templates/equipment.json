@@ -1,0 +1,48 @@
+{
+  "id": "",
+  "name": "",
+  "slot": "",
+  "slotCount": 0,
+  "occupiesSlots": [],
+  "stat": {
+    "strength": 0,
+    "intelligence": 0,
+    "agility": 0,
+    "luck": 0,
+    "hp": 0,
+    "mp": 0,
+    "hpMax": 0,
+    "mpMax": 0
+  },
+  "combatStat": {
+    "physicalAttackMin": 0,
+    "physicalAttackMax": 0,
+    "magicAttackMin": 0,
+    "magicAttackMax": 0,
+    "physicalDefense": 0,
+    "magicDefense": 0,
+    "moveSpeed": 0,
+    "evasion": 0,
+    "accuracy": 0,
+    "critRate": 0,
+    "critDamage": 0,
+    "hpRecovery": 0,
+    "mpRecovery": 0,
+    "castSpeed": 0,
+    "attackStartupMs": 0,
+    "attackActiveMs": 0,
+    "attackRecoveryMs": 0,
+    "attackIntervalMs": 0
+  },
+  "requirement": {
+    "strength": 0,
+    "intelligence": 0,
+    "agility": 0,
+    "luck": 0
+  },
+  "minLevel": 0,
+  "allowedJobs": [],
+  "allowedGenders": [],
+  "exclusiveGroup": "",
+  "incompatibleWith": []
+}

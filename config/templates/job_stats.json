@@ -1,0 +1,35 @@
+{
+  "name": "",
+  "attackIntervalMs": 0,
+  "attackInterval": {
+    "baseMs": 0,
+    "minMs": 0,
+    "maxMs": 0,
+    "startupMs": 0,
+    "activeMs": 0,
+    "recoveryMs": 0,
+    "reduction": {
+      "strength": 0,
+      "intelligence": 0,
+      "agility": 0,
+      "luck": 0
+    }
+  },
+  "allocation": {
+    "hpMax": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "mpMax": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "physicalAttackMin": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "physicalAttackMax": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "magicAttackMin": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "magicAttackMax": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "physicalDefense": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "magicDefense": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "moveSpeed": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "evasion": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "accuracy": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "critRate": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "critDamage": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "hpRecovery": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 },
+    "mpRecovery": { "strength": 0, "intelligence": 0, "agility": 0, "luck": 0 }
+  }
+}

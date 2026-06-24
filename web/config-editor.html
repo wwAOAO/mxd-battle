@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MXD Config Editor</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: #1f2937;
+        background: #eef2f6;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        height: 100vh;
+        min-height: 0;
+      }
+
+      aside {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 12px;
+        min-height: 0;
+        padding: 16px;
+        border-right: 1px solid #d5dde8;
+        background: #ffffff;
+      }
+
+      .editor {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        min-height: 0;
+        padding: 16px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      h2 {
+        color: #526174;
+        font-size: 13px;
+        text-transform: uppercase;
+      }
+
+      h3 {
+        color: #253149;
+        font-size: 15px;
+      }
+
+      button,
+      select,
+      input {
+        width: 100%;
+        min-width: 0;
+        border: 1px solid #c8d2df;
+        border-radius: 6px;
+        font: inherit;
+        background: #ffffff;
+      }
+
+      button,
+      select,
+      input {
+        min-height: 36px;
+        padding: 7px 10px;
+      }
+
+      button {
+        cursor: pointer;
+        color: #ffffff;
+        border-color: #2d6cdf;
+        background: #2d6cdf;
+        font-weight: 800;
+      }
+
+      button.secondary {
+        color: #253149;
+        border-color: #c8d2df;
+        background: #edf2f8;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .panel {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #d8e0ea;
+        border-radius: 8px;
+        background: #fbfcfe;
+      }
+
+      .file-panel {
+        grid-template-rows: auto minmax(0, 1fr);
+        align-content: stretch;
+      }
+
+      .file-list {
+        display: grid;
+        align-content: start;
+        gap: 4px;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .file-item {
+        display: grid;
+        grid-template-columns: minmax(72px, 0.65fr) minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        min-height: 34px;
+        padding: 6px 8px;
+        border: 1px solid #d8e0ea;
+        border-radius: 6px;
+        background: #f8fafc;
+        cursor: pointer;
+      }
+
+      .file-item.active {
+        border-color: #2d6cdf;
+        background: #eaf1ff;
+      }
+
+      .status,
+      .current-file,
+      .field-path {
+        overflow-wrap: anywhere;
+      }
+
+      .file-item strong,
+      .file-item span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .file-item strong {
+        color: #253149;
+        font-size: 13px;
+      }
+
+      .file-item span,
+      .field-path,
+      .field-help {
+        color: #64748b;
+        font-size: 12px;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 150px;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .current-file {
+        color: #253149;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .form-root {
+        display: grid;
+        gap: 12px;
+        min-height: 0;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .group {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #d8e0ea;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .group-header {
+        display: grid;
+        gap: 4px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #edf1f6;
+      }
+
+      .field-row {
+        display: grid;
+        grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+      }
+
+      .group.compact-fields {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+      }
+
+      .group.compact-fields > .group-header,
+      .group.compact-fields > .group {
+        grid-column: 1 / -1;
+      }
+
+      .group.compact-fields > .field-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 6px 8px;
+        border: 1px solid #edf1f6;
+        border-radius: 6px;
+        background: #fbfcfe;
+      }
+
+      .group.compact-fields .field-label {
+        padding-top: 0;
+      }
+
+      .group.compact-fields .field-path {
+        display: none;
+      }
+
+      .group.compact-fields input {
+        min-height: 32px;
+        padding: 5px 8px;
+      }
+
+      .field-label {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+        padding-top: 6px;
+      }
+
+      .field-name {
+        color: #253149;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .field-control {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .status {
+        min-height: 38px;
+        padding: 10px;
+        border: 1px solid #d8e0ea;
+        border-radius: 6px;
+        color: #526174;
+        background: #fbfcfe;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: 1fr;
+          grid-template-rows: 42vh minmax(0, 1fr);
+        }
+
+        aside {
+          border-right: 0;
+          border-bottom: 1px solid #d5dde8;
+        }
+
+        .toolbar,
+        .field-row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside>
+        <h1>MXD 配置编辑器</h1>
+        <div class="panel">
+          <h2>配置类型</h2>
+          <select id="category">
+            <option value="equipment">装备配置</option>
+            <option value="job_stats">职业属性配置</option>
+            <option value="job_skills">职业技能配置</option>
+          </select>
+          <button id="reloadFiles" class="secondary">重新读取文件</button>
+        </div>
+        <div class="panel file-panel">
+          <h2>配置文件</h2>
+          <div id="fileList" class="file-list"></div>
+        </div>
+      </aside>
+
+      <section class="editor">
+        <div class="toolbar">
+          <div id="currentFile" class="current-file">请选择一个配置文件</div>
+          <button id="save" disabled>保存到文件</button>
+        </div>
+        <div id="formRoot" class="form-root">
+          <div class="status">请选择左侧配置文件。</div>
+        </div>
+        <div id="status" class="status">Ready.</div>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let files = [];
+      let selectedFile = null;
+      let currentConfig = null;
+      let configTemplates = {};
+      const fieldControls = new Map();
+
+      const labels = {
+        id: "配置ID",
+        name: "名称",
+        slot: "装备部位",
+        slotCount: "占用格数",
+        occupiesSlots: "占用装备栏",
+        stat: "基础属性加成",
+        combatStat: "战斗属性加成",
+        requirement: "穿戴属性要求",
+        minLevel: "最低等级",
+        allowedJobs: "允许职业",
+        allowedGenders: "允许性别",
+        exclusiveGroup: "互斥组",
+        incompatibleWith: "不兼容装备",
+        strength: "力量 STR",
+        intelligence: "智力 INT",
+        agility: "敏捷 AGI",
+        luck: "幸运 LUK",
+        hp: "当前生命值 HP",
+        mp: "当前魔法值 MP",
+        hpMax: "最大生命值 HPMax",
+        mpMax: "最大魔法值 MPMax",
+        physicalAttackMin: "最小物理攻击力",
+        physicalAttackMax: "最大物理攻击力",
+        magicAttackMin: "最小魔法攻击力",
+        magicAttackMax: "最大魔法攻击力",
+        physicalDefense: "物理防御力",
+        magicDefense: "魔法防御力",
+        moveSpeed: "移动速度",
+        evasion: "回避率",
+        accuracy: "命中率",
+        critRate: "暴击率",
+        critDamage: "暴击伤害",
+        hpRecovery: "生命自动恢复",
+        mpRecovery: "魔法自动恢复",
+        castSpeed: "释放速度",
+        attackStartupMs: "攻击前摇毫秒",
+        attackActiveMs: "攻击有效毫秒",
+        attackRecoveryMs: "攻击后摇毫秒",
+        attackIntervalMs: "攻击间隔毫秒",
+        attackInterval: "普通攻击节奏配置",
+        baseMs: "基础间隔毫秒",
+        minMs: "最小间隔毫秒",
+        maxMs: "最大间隔毫秒",
+        startupMs: "前摇毫秒",
+        activeMs: "有效时间毫秒",
+        recoveryMs: "后摇毫秒",
+        reduction: "属性减少间隔",
+        allocation: "属性百分比分配",
+        mpCost: "消耗MP",
+        cooldownMs: "冷却毫秒",
+        range: "技能范围",
+        width: "宽度",
+        height: "高度",
+        projectile: "飞行物配置",
+        speed: "飞行速度",
+        maxDistance: "最大飞行距离",
+        damage: "伤害配置",
+        base: "基础伤害",
+        magicRate: "魔法攻击倍率",
+      };
+
+      const helpText = {
+        allowedJobs: "多个值用英文逗号分隔，例如 beginner,warrior。",
+        allowedGenders: "多个值用英文逗号分隔，例如 male,female。",
+        occupiesSlots: "多个装备栏用英文逗号分隔。",
+        incompatibleWith: "多个装备ID用英文逗号分隔。",
+        allocation: "职业属性分配填写百分比，100 表示该主属性的 100%。",
+        reduction: "每 1 点主属性减少多少毫秒，不是百分比。",
+        attackStartupMs: "负数表示装备让前摇变短。",
+        attackRecoveryMs: "负数表示装备让后摇变短。",
+        attackIntervalMs: "负数表示装备让总攻击间隔变短。",
+        castSpeed: "数值越大，技能释放总时间越短。",
+      };
+
+      async function loadTemplates() {
+        const response = await fetch("/config-templates");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        configTemplates = payload.templates || {};
+      }
+      function setStatus(text) {
+        $("status").textContent = text;
+      }
+
+      function selectedCategory() {
+        return $("category").value;
+      }
+
+      function configFileURL(file) {
+        return `/config-files/${encodeURIComponent(file.category)}/${encodeURI(file.path)}`;
+      }
+
+      async function loadFiles() {
+        selectedFile = null;
+        currentConfig = null;
+        fieldControls.clear();
+        $("save").disabled = true;
+        $("currentFile").textContent = "请选择一个配置文件";
+        $("formRoot").innerHTML = '<div class="status">正在读取文件列表...</div>';
+        setStatus("Loading files...");
+
+        try {
+          const response = await fetch("/config-files");
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const payload = await response.json();
+          files = Array.isArray(payload.files) ? payload.files : [];
+          renderFileList();
+          setStatus(`Loaded ${files.length} config file(s).`);
+          $("formRoot").innerHTML = '<div class="status">请选择左侧配置文件。</div>';
+        } catch (error) {
+          files = [];
+          renderFileList();
+          setStatus(`Failed to load files: ${error.message}`);
+        }
+      }
+
+      function renderFileList() {
+        const list = $("fileList");
+        list.textContent = "";
+        const visibleFiles = files.filter(
+          (file) => file.category === selectedCategory(),
+        );
+        if (visibleFiles.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "status";
+          empty.textContent = "没有配置文件。";
+          list.appendChild(empty);
+          return;
+        }
+
+        for (const file of visibleFiles) {
+          const item = document.createElement("div");
+          item.className =
+            "file-item" +
+            (selectedFile &&
+            selectedFile.category === file.category &&
+            selectedFile.path === file.path
+              ? " active"
+              : "");
+          item.innerHTML = `<strong>${file.name}</strong><span>${file.path}</span>`;
+          item.addEventListener("click", () => loadConfigFile(file));
+          list.appendChild(item);
+        }
+      }
+
+      async function loadConfigFile(file) {
+        setStatus(`Loading ${file.category}/${file.path}...`);
+        try {
+          const response = await fetch(configFileURL(file));
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          currentConfig = applyTemplate(file.category, await response.json());
+          selectedFile = file;
+          $("currentFile").textContent = `${file.category}/${file.path}`;
+          $("save").disabled = false;
+          renderFileList();
+          renderForm(currentConfig);
+          setStatus(`Loaded ${file.category}/${file.path}.`);
+        } catch (error) {
+          setStatus(`Failed to load ${file.path}: ${error.message}`);
+        }
+      }
+
+      function renderForm(config) {
+        fieldControls.clear();
+        const root = $("formRoot");
+        root.textContent = "";
+        renderValue(root, [], config, "root");
+      }
+
+      function applyTemplate(category, value) {
+        const template = configTemplates[category];
+        if (!template) return value;
+        if (category === "equipment" && isEquipmentGroup(value)) {
+          const result = {};
+          for (const key of Object.keys(value)) {
+            result[key] = mergeTemplate(template, value[key] || {});
+          }
+          return result;
+        }
+        return mergeTemplate(template, value || {});
+      }
+
+      function isEquipmentGroup(value) {
+        if (!isPlainObject(value)) return false;
+        if ("slot" in value || "stat" in value || "combatStat" in value || "requirement" in value) return false;
+        return Object.values(value).some((item) => isPlainObject(item));
+      }
+
+      function mergeTemplate(template, value) {
+        if (Array.isArray(template)) return Array.isArray(value) ? value : [...template];
+        if (!isPlainObject(template)) return value === undefined ? template : value;
+        const result = {};
+        for (const key of Object.keys(template)) {
+          result[key] = mergeTemplate(template[key], isPlainObject(value) ? value[key] : undefined);
+        }
+        if (isPlainObject(value)) {
+          for (const key of Object.keys(value)) {
+            if (!(key in result)) result[key] = value[key];
+          }
+        }
+        return result;
+      }
+
+      function renderValue(parent, path, value, key) {
+        if (isPlainObject(value)) {
+          const group = document.createElement("div");
+          group.className = "group" + (isCompactGroup(value) ? " compact-fields" : "");
+          const header = document.createElement("div");
+          header.className = "group-header";
+          const title = document.createElement("h3");
+          title.textContent = path.length === 0 ? "配置内容" : labelFor(key);
+          const sub = document.createElement("div");
+          sub.className = "field-path";
+          sub.textContent = path.length === 0 ? selectedFile.path : path.join(".");
+          header.appendChild(title);
+          header.appendChild(sub);
+          group.appendChild(header);
+          for (const childKey of Object.keys(value)) {
+            renderValue(group, [...path, childKey], value[childKey], childKey);
+          }
+          parent.appendChild(group);
+          return;
+        }
+
+        const row = document.createElement("div");
+        row.className = "field-row";
+        const label = document.createElement("div");
+        label.className = "field-label";
+        const name = document.createElement("div");
+        name.className = "field-name";
+        name.textContent = labelFor(key);
+        const pathNode = document.createElement("div");
+        pathNode.className = "field-path";
+        pathNode.textContent = path.join(".");
+        label.appendChild(name);
+        label.appendChild(pathNode);
+
+        const controlWrap = document.createElement("div");
+        controlWrap.className = "field-control";
+        const input = document.createElement("input");
+        input.dataset.path = JSON.stringify(path);
+        input.dataset.type = valueType(value);
+        input.value = valueToInput(value);
+        if (typeof value === "number") {
+          input.type = "number";
+          input.step = Number.isInteger(value) ? "1" : "0.01";
+        } else if (typeof value === "boolean") {
+          input.type = "checkbox";
+          input.checked = value;
+          input.value = "true";
+        } else {
+          input.type = "text";
+        }
+        fieldControls.set(path.join("."), input);
+        controlWrap.appendChild(input);
+        const help = helpFor(path, key);
+        if (help) {
+          const hint = document.createElement("div");
+          hint.className = "field-help";
+          hint.textContent = help;
+          controlWrap.appendChild(hint);
+        }
+
+        row.appendChild(label);
+        row.appendChild(controlWrap);
+        parent.appendChild(row);
+      }
+
+      function labelFor(key) {
+        return labels[key] || key;
+      }
+
+      function helpFor(path, key) {
+        if (selectedFile && selectedFile.category === "job_stats" && path[0] === "allocation") {
+          return "百分比属性：填写百分比，100 表示对应主属性的 100%。";
+        }
+        return helpText[key];
+      }
+
+      function isPlainObject(value) {
+        return value && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function isCompactGroup(value) {
+        if (!isPlainObject(value)) return false;
+        const simpleFieldCount = Object.values(value).filter(
+          (item) => !isPlainObject(item),
+        ).length;
+        return simpleFieldCount >= 2;
+      }
+
+      function valueType(value) {
+        if (Array.isArray(value)) return "array";
+        if (typeof value === "number") return Number.isInteger(value) ? "int" : "float";
+        if (typeof value === "boolean") return "bool";
+        if (value === null) return "null";
+        return "string";
+      }
+
+      function valueToInput(value) {
+        if (Array.isArray(value)) return value.join(",");
+        if (value === null || value === undefined) return "";
+        return String(value);
+      }
+
+      function collectConfig() {
+        const result = structuredClone(currentConfig);
+        for (const input of fieldControls.values()) {
+          const path = JSON.parse(input.dataset.path);
+          setByPath(result, path, inputToValue(input));
+        }
+        return result;
+      }
+
+      function inputToValue(input) {
+        const type = input.dataset.type;
+        if (type === "bool") return input.checked;
+        if (type === "int") return Number.parseInt(input.value || "0", 10) || 0;
+        if (type === "float") return Number.parseFloat(input.value || "0") || 0;
+        if (type === "array") {
+          return input.value
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+        if (type === "null") return input.value.trim() === "" ? null : input.value;
+        return input.value;
+      }
+
+      function setByPath(target, path, value) {
+        let cursor = target;
+        for (let i = 0; i < path.length - 1; i++) cursor = cursor[path[i]];
+        cursor[path[path.length - 1]] = value;
+      }
+
+      async function saveConfigFile() {
+        if (!selectedFile || !currentConfig) return;
+        const nextConfig = collectConfig();
+        const payload = JSON.stringify(nextConfig, null, 2);
+        const button = $("save");
+        button.disabled = true;
+        button.textContent = "保存中...";
+        setStatus(`Saving ${selectedFile.category}/${selectedFile.path}...`);
+        try {
+          const response = await fetch(configFileURL(selectedFile), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+          });
+          let result = {};
+          try {
+            result = await response.json();
+          } catch (_error) {}
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          currentConfig = nextConfig;
+          renderForm(currentConfig);
+          setStatus(`Saved ${selectedFile.category}/${selectedFile.path}. Restart server to reload runtime config.`);
+        } catch (error) {
+          setStatus(`Save failed: ${error.message}`);
+        } finally {
+          button.textContent = "保存到文件";
+          button.disabled = !selectedFile;
+        }
+      }
+
+      $("category").addEventListener("change", () => {
+        selectedFile = null;
+        currentConfig = null;
+        fieldControls.clear();
+        $("save").disabled = true;
+        $("currentFile").textContent = "请选择一个配置文件";
+        $("formRoot").innerHTML = '<div class="status">请选择左侧配置文件。</div>';
+        renderFileList();
+      });
+      $("reloadFiles").addEventListener("click", loadFiles);
+      $("save").addEventListener("click", saveConfigFile);
+
+      loadTemplates()
+        .then(loadFiles)
+        .catch((error) => {
+          setStatus(`Failed to load templates: ${error.message}`);
+        });
+    </script>
+  </body>
+</html>

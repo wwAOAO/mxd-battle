@@ -85,6 +85,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/job-stats", h.jobStats)
 	mux.HandleFunc("/equipment-stats", h.equipmentStats)
 	mux.HandleFunc("/monster-stats", h.monsterStats)
+	mux.HandleFunc("/config-files", h.configFiles)
+	mux.HandleFunc("/config-templates", h.configTemplates)
+	mux.HandleFunc("/config-files/", h.configFile)
 	mux.HandleFunc("/map-files", h.mapFiles)
 	mux.HandleFunc("/map-files/", h.mapFile)
 	mux.HandleFunc("/rooms", h.rooms)
@@ -250,6 +253,159 @@ func (h *Handler) saveMapFile(w http.ResponseWriter, r *http.Request, path strin
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+type configFileInfo struct {
+	Category string `json:"category"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+}
+
+var editableConfigRoots = map[string]string{
+	"equipment":  filepath.Join("config", "equipment"),
+	"job_stats":  filepath.Join("config", "job_stats"),
+	"job_skills": filepath.Join("config", "job_skills"),
+}
+
+func (h *Handler) configTemplates(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/config-templates" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "config template not found"})
+		return
+	}
+
+	templates := make(map[string]any)
+	for category := range editableConfigRoots {
+		path := filepath.Join("config", "templates", category+".json")
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			h.logger.Warn("failed to read config template", "category", category, "path", path, "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read config templates"})
+			return
+		}
+		var value any
+		if err := json.Unmarshal(payload, &value); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "invalid config template " + category})
+			return
+		}
+		templates[category] = value
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
+}
+func (h *Handler) configFiles(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/config-files" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "config file not found"})
+		return
+	}
+
+	files := make([]configFileInfo, 0)
+	for category, root := range editableConfigRoots {
+		if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || filepath.Ext(path) != ".json" {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, configFileInfo{
+				Category: category,
+				Name:     strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+				Path:     filepath.ToSlash(rel),
+			})
+			return nil
+		}); err != nil {
+			h.logger.Warn("failed to list config files", "category", category, "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list config files"})
+			return
+		}
+	}
+	slices.SortFunc(files, func(a configFileInfo, b configFileInfo) int {
+		if a.Category != b.Category {
+			return strings.Compare(a.Category, b.Category)
+		}
+		return strings.Compare(a.Path, b.Path)
+	})
+	writeJSON(w, http.StatusOK, map[string][]configFileInfo{"files": files})
+}
+
+func (h *Handler) configFile(w http.ResponseWriter, r *http.Request) {
+	category, clean, ok := parseEditableConfigPath(strings.TrimPrefix(r.URL.Path, "/config-files/"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid config file path"})
+		return
+	}
+	root := editableConfigRoots[category]
+	path := filepath.Join(root, clean)
+	if r.Method == http.MethodPut {
+		h.saveConfigFile(w, r, path)
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "config file not found"})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
+}
+
+func parseEditableConfigPath(value string) (string, string, bool) {
+	category, rel, ok := strings.Cut(value, "/")
+	if !ok || category == "" || rel == "" || strings.Contains(rel, "\\") {
+		return "", "", false
+	}
+	if _, ok := editableConfigRoots[category]; !ok {
+		return "", "", false
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if clean == "." || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) || filepath.Ext(clean) != ".json" {
+		return "", "", false
+	}
+	return category, clean, true
+}
+
+func (h *Handler) saveConfigFile(w http.ResponseWriter, r *http.Request, path string) {
+	payload, err := io.ReadAll(io.LimitReader(r.Body, 2*1024*1024))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read request body"})
+		return
+	}
+	if len(payload) == 2*1024*1024 {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "config file is too large"})
+		return
+	}
+
+	var value any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid config json: " + err.Error()})
+		return
+	}
+	formatted, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to format config json"})
+		return
+	}
+	formatted = append(formatted, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		h.logger.Warn("failed to create config directory", "path", path, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create config directory"})
+		return
+	}
+	if err := os.WriteFile(path, formatted, 0644); err != nil {
+		h.logger.Warn("failed to save config file", "path", path, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save config file"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 func (h *Handler) equipmentStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.EquipmentConfigs())

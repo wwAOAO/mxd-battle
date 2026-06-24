@@ -1,0 +1,22 @@
+{
+  "id": "",
+  "name": "",
+  "mpCost": 0,
+  "cooldownMs": 0,
+  "startupMs": 0,
+  "activeMs": 0,
+  "recoveryMs": 0,
+  "range": 0,
+  "width": 0,
+  "height": 0,
+  "projectile": {
+    "speed": 0,
+    "width": 0,
+    "height": 0,
+    "maxDistance": 0
+  },
+  "damage": {
+    "base": 0,
+    "magicRate": 0
+  }
+}

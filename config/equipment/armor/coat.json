@@ -1,29 +1,24 @@
 {
-    "traveler_cloak":  {
-                           "id":  "traveler_cloak",
-                           "name":  "Traveler Cloak",
-                           "slot":  "armor",
-                           "stat":  {
-                                        "hpMax":  80,
-                                        "mpMax":  20
-                                    },
-                           "requirement":  {
-                                               "strength":  5,
-                                               "agility":  4
-                                           },
-                           "minLevel":  4,
-                           "allowedGenders":  [
-                                                  "male",
-                                                  "female"
-                                              ],
-                           "exclusiveGroup":  "trinket",
-                           "incompatibleWith":  [
-                                                    "lucky_charm"
-                                                ],
-                           "combatStat":  {
-                                              "physicalDefense":  5,
-                                              "magicDefense":  5,
-                                              "hpRecovery":  0.2
-                                          }
-                       }
+    "traveler_cloak": {
+        "id": "traveler_cloak",
+        "name": "Traveler Cloak",
+        "slot": "armor",
+        "stat": {
+            "hpMax": 80,
+            "mpMax": 20
+        },
+        "requirement": {
+            "strength": 5,
+            "agility": 4
+        },
+        "minLevel": 4,
+        "allowedGenders": ["male", "female"],
+        "exclusiveGroup": "trinket",
+        "incompatibleWith": ["lucky_charm"],
+        "combatStat": {
+            "physicalDefense": 5,
+            "magicDefense": 5,
+            "hpRecovery": 0.2
+        }
+    }
 }
