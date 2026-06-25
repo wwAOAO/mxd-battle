@@ -93,7 +93,17 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/rooms", h.rooms)
 	mux.HandleFunc("/rooms/", h.roomState)
 	mux.HandleFunc("/ws", h.websocket)
-	mux.Handle("/", http.FileServer(http.Dir("web")))
+	mux.Handle("/", noCacheFileServer(http.Dir("web")))
+}
+
+func noCacheFileServer(root http.FileSystem) http.Handler {
+	fileServer := http.FileServer(root)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {

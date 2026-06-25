@@ -40,9 +40,9 @@
     "agility": 0,
     "luck": 0
   },
+  "incompatibleWith": [],
   "minLevel": 0,
   "allowedJobs": [],
   "allowedGenders": [],
-  "exclusiveGroup": "",
-  "incompatibleWith": []
+  "exclusiveGroup": ""
 }

@@ -1,18 +1,16 @@
 {
-    "lucky_charm":  {
-                        "id":  "lucky_charm",
-                        "name":  "Lucky Charm",
-                        "slot":  "accessory",
-                        "stat":  {
-                                     "luck":  6
-                                 },
-                        "requirement":  {
-                                            "luck":  6
-                                        },
-                        "minLevel":  4,
-                        "exclusiveGroup":  "trinket",
-                        "incompatibleWith":  [
-                                                 "traveler_cloak"
-                                             ]
-                    }
+    "lucky_charm": {
+        "id": "lucky_charm",
+        "name": "Lucky Charm",
+        "slot": "accessory",
+        "stat": {
+            "luck": 6
+        },
+        "requirement": {
+            "luck": 6
+        },
+        "minLevel": 4,
+        "exclusiveGroup": "trinket",
+        "incompatibleWith": ["traveler_cloak"]
+    }
 }
