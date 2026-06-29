@@ -38,6 +38,7 @@ type RoomState struct {
 	Map         world.MapConfig       `json:"map"`
 	Players     map[string]Player     `json:"players"`
 	Monsters    map[string]Monster    `json:"monsters"`
+	LootDrops   map[string]LootDrop   `json:"lootDrops"`
 	Projectiles map[string]Projectile `json:"projectiles"`
 }
 
@@ -48,6 +49,8 @@ type ServerEvent struct {
 	PlayerID     string                    `json:"playerId,omitempty"`
 	Monster      *Monster                  `json:"monster,omitempty"`
 	MonsterID    string                    `json:"monsterId,omitempty"`
+	LootDrop     *LootDrop                 `json:"lootDrop,omitempty"`
+	LootDropID   string                    `json:"lootDropId,omitempty"`
 	Attack       *AttackResult             `json:"attack,omitempty"`
 	Skill        *SkillResult              `json:"skill,omitempty"`
 	Projectile   *Projectile               `json:"projectile,omitempty"`
@@ -610,6 +613,9 @@ func (h *Hub) normalAttackAt(playerID string, now time.Time) (AttackResult, Play
 				attacker.Exp = addExpString(attacker.Exp, monster.ExpReward)
 				attacker.UpdatedAt = now
 				room.players[playerID] = attacker
+				if drop, ok := resolveMonsterLootDrop(monster, h.equipments, playerID, now); ok {
+					room.lootDrops[drop.ID] = drop
+				}
 			}
 			room.monsters[monsterID] = monster
 			targetMonster = monster
@@ -911,6 +917,9 @@ func (h *Hub) StepPhysics(now time.Time, dt float64) {
 							hitPlayer = caster
 							hasPlayerHit = true
 						}
+						if drop, ok := resolveMonsterLootDrop(monster, h.equipments, projectile.CasterID, now); ok {
+							room.lootDrops[drop.ID] = drop
+						}
 					}
 					room.monsters[monsterID] = monster
 					hitMonster = monster
@@ -1013,6 +1022,52 @@ func (h *Hub) Leave(playerID string) {
 	h.publish("battle.events.world.player_left", event)
 }
 
+func (h *Hub) PickupLoot(playerID string) (Player, LootDrop, bool) {
+	now := time.Now().UTC()
+
+	h.mu.Lock()
+	roomID, ok := h.players[playerID]
+	if !ok {
+		h.mu.Unlock()
+		return Player{}, LootDrop{}, false
+	}
+	room := h.rooms[roomID]
+	player, ok := room.players[playerID]
+	if !ok {
+		h.mu.Unlock()
+		return Player{}, LootDrop{}, false
+	}
+
+	var selected LootDrop
+	found := false
+	bestDistance := 0.0
+	for _, drop := range room.lootDrops {
+		if !canPickupLoot(player, drop) {
+			continue
+		}
+		distance := absFloat64(player.X - drop.X)
+		if !found || distance < bestDistance {
+			selected = drop
+			bestDistance = distance
+			found = true
+		}
+	}
+	if !found {
+		h.mu.Unlock()
+		return Player{}, LootDrop{}, false
+	}
+	delete(room.lootDrops, selected.ID)
+	player.UpdatedAt = now
+	room.players[playerID] = player
+	selectedCopy := selected
+	recipients := roomPeers(room)
+	h.mu.Unlock()
+
+	event := ServerEvent{Type: "loot_picked", Room: roomID, Player: &player, LootDrop: &selectedCopy, LootDropID: selected.ID, CreatedAt: now}
+	h.broadcast(recipients, event)
+	h.publish("battle.events.world.loot_picked", event)
+	return player, selected, true
+}
 func (h *Hub) State(roomID string) (RoomState, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -1047,6 +1102,28 @@ func (h *Hub) publish(subject string, event ServerEvent) {
 	}
 }
 
+func resolveMonsterLootDrop(monster Monster, equipmentConfigs combat.EquipmentConfigs, attackerID string, now time.Time) (LootDrop, bool) {
+	if len(equipmentConfigs) == 0 {
+		return newLootDrop(monster, attackerID, "test_drop", "Test Drop", now), true
+	}
+	preferred := monster.MonsterID
+	if _, ok := equipmentConfigs[preferred]; ok {
+		cfg := equipmentConfigs[preferred]
+		name := cfg.Name
+		if name == "" {
+			name = cfg.ID
+		}
+		return newLootDrop(monster, attackerID, cfg.ID, name, now), true
+	}
+	for id, cfg := range equipmentConfigs {
+		name := cfg.Name
+		if name == "" {
+			name = id
+		}
+		return newLootDrop(monster, attackerID, id, name, now), true
+	}
+	return LootDrop{}, false
+}
 func maxInt32(a int32, b int32) int32 {
 	if a > b {
 		return a

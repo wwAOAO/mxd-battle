@@ -353,6 +353,10 @@ func (h *Handler) configFile(w http.ResponseWriter, r *http.Request) {
 		h.saveConfigFile(w, r, path)
 		return
 	}
+	if r.Method == http.MethodDelete {
+		h.deleteConfigFile(w, path)
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -416,6 +420,19 @@ func (h *Handler) saveConfigFile(w http.ResponseWriter, r *http.Request, path st
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
+}
+
+func (h *Handler) deleteConfigFile(w http.ResponseWriter, path string) {
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "config file not found"})
+			return
+		}
+		h.logger.Warn("failed to delete config file", "path", path, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete config file"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 func (h *Handler) equipmentStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.hub.EquipmentConfigs())
@@ -603,6 +620,10 @@ func (c *websocketClient) readLoop(hub *Hub) {
 				if ok {
 					c.roomID = player.Room
 				}
+				continue
+			}
+			if msg.Type == "pickup" {
+				_, _, _ = hub.PickupLoot(c.playerID)
 				continue
 			}
 			if msg.Type == "input" {

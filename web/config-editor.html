@@ -67,7 +67,7 @@
       h2,
       h3 {
         margin: 0;
-        line-height: 1.2;
+        line-height: 1.9;
       }
 
       h1 {
@@ -923,12 +923,39 @@
           group.className = "group" + (isCompactGroup(value) ? " compact-fields" : "");
           const header = document.createElement("div");
           header.className = "group-header";
+          const headerRow = document.createElement("div");
+          headerRow.className = "group-header-row";
           const title = document.createElement("h3");
           title.textContent = path.length === 0 ? "配置内容" : labelFor(key);
+          headerRow.appendChild(title);
+          if (selectedFile && selectedFile.category === "equipment") {
+            if (isEquipmentGroup(value)) {
+              const addButton = document.createElement("button");
+              addButton.type = "button";
+              addButton.className = "group-action secondary";
+              addButton.textContent = "新增配置项";
+              addButton.addEventListener("click", () => addEquipmentGroupItem(path));
+              headerRow.appendChild(addButton);
+            } else if (path.length === 1 && isPlainObject(currentConfig) && isEquipmentGroup(currentConfig)) {
+              const deleteButton = document.createElement("button");
+              deleteButton.type = "button";
+              deleteButton.className = "group-action secondary";
+              deleteButton.textContent = "删除配置项";
+              deleteButton.addEventListener("click", () => removeEquipmentGroupItem(path));
+              headerRow.appendChild(deleteButton);
+            }
+          } else if (selectedFile && (selectedFile.category === "job_stats" || selectedFile.category === "job_skills") && path.length === 0) {
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "group-action secondary";
+            deleteButton.textContent = "删除当前配置";
+            deleteButton.addEventListener("click", deleteCurrentConfigFile);
+            headerRow.appendChild(deleteButton);
+          }
           const sub = document.createElement("div");
           sub.className = "field-path";
           sub.textContent = path.length === 0 ? selectedFile.path : path.join(".");
-          header.appendChild(title);
+          header.appendChild(headerRow);
           header.appendChild(sub);
           group.appendChild(header);
           for (const childKey of orderedKeys(value, path)) {
@@ -1324,12 +1351,96 @@
         return input.value;
       }
 
+      function getByPath(target, path) {
+        let cursor = target;
+        for (const key of path) cursor = cursor[key];
+        return cursor;
+      }
+
+      function nextEquipmentGroupKey(group, baseKey) {
+        const cleanBase = String(baseKey || "item").trim() || "item";
+        if (!(cleanBase in group)) return cleanBase;
+        let index = 2;
+        while (`${cleanBase}_${index}` in group) index++;
+        return `${cleanBase}_${index}`;
+      }
+
+      function addEquipmentGroupItem(path) {
+        if (!currentConfig) return;
+        const group = getByPath(currentConfig, path);
+        if (!isEquipmentGroup(group)) return;
+        const keys = Object.keys(group);
+        if (keys.length === 0) {
+          setStatus("当前配置组为空，无法复制新增。");
+          return;
+        }
+        const sourceKey = keys[keys.length - 1];
+        const suggestedKey = nextEquipmentGroupKey(group, sourceKey);
+        const inputKey = window.prompt("请输入新的配置项 key：", suggestedKey);
+        if (!inputKey) return;
+        const newKey = inputKey.trim();
+        if (!newKey) return;
+        if (newKey in group) {
+          setStatus(`配置项 ${newKey} 已存在。`);
+          return;
+        }
+        group[newKey] = structuredClone(group[sourceKey]);
+        renderForm(currentConfig);
+        setStatus(`已新增配置项 ${newKey}。`);
+      }
+
+      function removeEquipmentGroupItem(path) {
+        if (!currentConfig || path.length !== 1) return;
+        if (!isPlainObject(currentConfig) || !isEquipmentGroup(currentConfig)) return;
+        const key = path[0];
+        if (!(key in currentConfig)) return;
+        const itemCount = Object.keys(currentConfig).length;
+        if (itemCount <= 1) {
+          setStatus("至少需要保留一个配置项。")
+          return;
+        }
+        const confirmed = window.confirm(`确认删除配置项 ${key} 吗？`);
+        if (!confirmed) return;
+        delete currentConfig[key];
+        renderForm(currentConfig);
+        setStatus(`已删除配置项 ${key}。`);
+      }
+
       function setByPath(target, path, value) {
         let cursor = target;
         for (let i = 0; i < path.length - 1; i++) cursor = cursor[path[i]];
         cursor[path[path.length - 1]] = value;
       }
 
+      async function deleteCurrentConfigFile() {
+        if (!selectedFile) return;
+        const confirmed = window.confirm(`确认删除配置 ${selectedFile.path} 吗？`);
+        if (!confirmed) return;
+        setStatus(`Deleting ${selectedFile.category}/${selectedFile.path}...`);
+        try {
+          const response = await fetch(configFileURL(selectedFile), {
+            method: "DELETE",
+          });
+          let result = {};
+          try {
+            result = await response.json();
+          } catch (_error) {}
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          const removedCategory = selectedFile.category;
+          const removedPath = selectedFile.path;
+          files = files.filter((file) => !(file.category === removedCategory && file.path === removedPath));
+          selectedFile = null;
+          currentConfig = null;
+          fieldControls.clear();
+          $("save").disabled = true;
+          $("currentFile").textContent = "请选择一个配置文件";
+          $("formRoot").innerHTML = '<div class="status">请选择左侧配置文件。</div>';
+          renderFileList();
+          setStatus(`Deleted ${removedCategory}/${removedPath}.`);
+        } catch (error) {
+          setStatus(`Delete failed: ${error.message}`);
+        }
+      }
       async function saveConfigFile() {
         if (!selectedFile || !currentConfig) return;
         const nextConfig = collectConfig();

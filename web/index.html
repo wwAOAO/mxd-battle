@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -396,6 +396,7 @@
       const players = new Map();
       const projectiles = new Map();
       const monsters = new Map();
+      const lootDrops = new Map();
       const selfId =
         "role-" + Math.random().toString(16).slice(2, 8).padEnd(6, "0");
 
@@ -590,6 +591,14 @@
         socket.send(JSON.stringify({ type: "attack" }));
       }
 
+      function pickupLoot() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+
+        socket.send(JSON.stringify({ type: "pickup" }));
+      }
       function castMagicMissile() {
         if (!socket || socket.readyState !== WebSocket.OPEN) {
           log("not connected");
@@ -648,6 +657,9 @@
           Object.values(event.state.projectiles || {}).forEach((projectile) => {
             projectiles.set(projectile.id, withDisplayProjectile(projectile));
           });
+          Object.values(event.state.lootDrops || {}).forEach((drop) => {
+            lootDrops.set(drop.id, drop);
+          });
           syncPrimaryStatForm();
           renderEquipmentPanel();
           renderSelfHud();
@@ -660,6 +672,12 @@
         if (event.monster) {
           const previousMonster = monsters.get(event.monster.id);
           monsters.set(event.monster.id, withDisplayMonster(event.monster, previousMonster));
+        }
+        if (event.lootDrop) {
+          lootDrops.set(event.lootDrop.id, event.lootDrop);
+        }
+        if ((event.type === "loot_picked" || event.type === "loot_removed") && event.lootDropId) {
+          lootDrops.delete(event.lootDropId);
         }
         if (event.player) {
           const previous = players.get(event.player.id);
@@ -717,6 +735,7 @@
         players.clear();
         monsters.clear();
         projectiles.clear();
+        lootDrops.clear();
         attacks.length = 0;
         damageTexts.length = 0;
         lastInputX = 0;
@@ -1471,6 +1490,7 @@
           }
         }
 
+        drawLootDrops(offsetX, offsetY, scale);
         drawAttackAreas(offsetX, offsetY, scale);
         drawProjectiles(offsetX, offsetY, scale);
         for (const monster of monsters.values()) {
@@ -1560,6 +1580,25 @@
           { x: terrain.x2 || 0, y: terrain.y2 || 0 },
         ];
       }
+      function drawLootDrops(offsetX, offsetY, scale) {
+        for (const drop of lootDrops.values()) {
+          const x = offsetX + drop.x * scale;
+          const y = offsetY + drop.y * scale;
+          const width = (drop.width || 34) * scale;
+          const height = (drop.height || 24) * scale;
+
+          ctx.fillStyle = "rgba(245, 158, 11, 0.22)";
+          ctx.fillRect(x - width / 2, y - height, width, height);
+          ctx.strokeStyle = "#f59e0b";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x - width / 2, y - height, width, height);
+
+          ctx.fillStyle = "#172033";
+          ctx.font = "12px system-ui";
+          ctx.fillText(drop.name || drop.equipmentId || drop.id, x + width / 2 + 6, y - height + 12);
+        }
+      }
+
       function drawProjectiles(offsetX, offsetY, scale) {
         for (const projectile of projectiles.values()) {
           ctx.fillStyle = "rgba(88, 80, 236, 0.22)";
@@ -1736,6 +1775,13 @@
           return;
         }
 
+        if (event.key === "v" || event.key === "V") {
+          event.preventDefault();
+          if (!pressedKeys.has("KeyV")) pickupLoot();
+          pressedKeys.add("KeyV");
+          return;
+        }
+
         if (
           event.key !== "ArrowLeft" &&
           event.key !== "ArrowRight" &&
@@ -1753,6 +1799,7 @@
         if (event.key === "c" || event.key === "C") pressedKeys.delete("KeyC");
         if (event.key === "x" || event.key === "X") pressedKeys.delete("KeyX");
         if (event.key === "z" || event.key === "Z") pressedKeys.delete("KeyZ");
+        if (event.key === "v" || event.key === "V") pressedKeys.delete("KeyV");
       });
 
       function controlLoop(now) {
@@ -1772,3 +1819,6 @@
     </script>
   </body>
 </html>
+
+
+

@@ -156,6 +156,43 @@ func TestHubMonsterCanBeDefeatedAndRespawns(t *testing.T) {
 	}
 }
 
+func TestHubPlayerCanPickupMonsterLoot(t *testing.T) {
+	hub := newMonsterTestHub(t)
+	if _, err := hub.Join(RoomX, Player{ID: "hero", X: 340, Y: 1500, Stat: PlayerStatBundle{Base: PlayerStat{Strength: 25, HP: 500, MP: 100, HPMax: 500, MPMax: 100}}}, &recordingPeer{}); err != nil {
+		t.Fatalf("join hero: %v", err)
+	}
+
+	if _, _, ok := hub.NormalAttack("hero"); !ok {
+		t.Fatal("expected normal attack to succeed")
+	}
+
+	state, err := hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state after attack: %v", err)
+	}
+	if len(state.LootDrops) != 1 {
+		t.Fatalf("expected one loot drop, got %d", len(state.LootDrops))
+	}
+
+	player, loot, ok := hub.PickupLoot("hero")
+	if !ok {
+		t.Fatal("expected pickup to succeed")
+	}
+	if loot.ID == "" {
+		t.Fatalf("expected picked loot id, got %+v", loot)
+	}
+	if player.ID != "hero" {
+		t.Fatalf("expected hero pickup result, got %+v", player)
+	}
+
+	state, err = hub.State(RoomX)
+	if err != nil {
+		t.Fatalf("state after pickup: %v", err)
+	}
+	if len(state.LootDrops) != 0 {
+		t.Fatalf("expected loot to be removed after pickup, got %+v", state.LootDrops)
+	}
+}
 func TestHubMonsterAttacksPlayer(t *testing.T) {
 	hub := newMonsterTestHub(t)
 	if _, err := hub.Join(RoomX, Player{ID: "hero", X: 455, Y: 1500, Stat: PlayerStatBundle{Base: PlayerStat{Strength: 10, HP: 500, MP: 100, HPMax: 500, MPMax: 100}}}, &recordingPeer{}); err != nil {

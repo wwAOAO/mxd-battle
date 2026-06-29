@@ -1,16 +1,104 @@
 {
-    "lucky_charm": {
-        "id": "lucky_charm",
-        "name": "Lucky Charm",
-        "slot": "accessory",
-        "stat": {
-            "luck": 6
-        },
-        "requirement": {
-            "luck": 6
-        },
-        "minLevel": 4,
-        "exclusiveGroup": "trinket",
-        "incompatibleWith": ["traveler_cloak"]
+  "lucky_charm": {
+    "allowedGenders": [],
+    "allowedJobs": [],
+    "combatStat": {
+      "accuracy": 0,
+      "attackActiveMs": 0,
+      "attackIntervalMs": 0,
+      "attackRecoveryMs": 0,
+      "attackStartupMs": 0,
+      "castSpeed": 0,
+      "critDamage": 0,
+      "critRate": 0,
+      "evasion": 0,
+      "hpRecovery": 0,
+      "magicAttackMax": 0,
+      "magicAttackMin": 0,
+      "magicDefense": 0,
+      "moveSpeed": 0,
+      "mpRecovery": 0,
+      "physicalAttackMax": 0,
+      "physicalAttackMin": 0,
+      "physicalDefense": 0
+    },
+    "exclusiveGroup": "trinket",
+    "id": "lucky_charm",
+    "incompatibleWith": [
+      "traveler_cloak"
+    ],
+    "minLevel": 4,
+    "name": "Lucky Charm",
+    "occupiesSlots": [
+      "accessory"
+    ],
+    "requirement": {
+      "agility": 0,
+      "intelligence": 0,
+      "luck": 6,
+      "strength": 0
+    },
+    "slot": "accessory",
+    "slotCount": 0,
+    "stat": {
+      "agility": 0,
+      "hp": 0,
+      "hpMax": 0,
+      "intelligence": 0,
+      "luck": 6,
+      "mp": 0,
+      "mpMax": 0,
+      "strength": 0
     }
+  },
+  "strength_charm": {
+    "allowedGenders": [],
+    "allowedJobs": [],
+    "combatStat": {
+      "accuracy": 0,
+      "attackActiveMs": 0,
+      "attackIntervalMs": 0,
+      "attackRecoveryMs": 0,
+      "attackStartupMs": 0,
+      "castSpeed": 0,
+      "critDamage": 0,
+      "critRate": 0,
+      "evasion": 0,
+      "hpRecovery": 0,
+      "magicAttackMax": 0,
+      "magicAttackMin": 0,
+      "magicDefense": 0,
+      "moveSpeed": 0,
+      "mpRecovery": 0,
+      "physicalAttackMax": 0,
+      "physicalAttackMin": 0,
+      "physicalDefense": 0
+    },
+    "exclusiveGroup": "trinket",
+    "id": "strength_charm",
+    "incompatibleWith": [],
+    "minLevel": 2,
+    "name": "Strength Charm",
+    "occupiesSlots": [
+      "accessory"
+    ],
+    "requirement": {
+      "agility": 0,
+      "intelligence": 0,
+      "luck": 0,
+      "strength": 2
+    },
+    "slot": "accessory",
+    "slotCount": 0,
+    "stat": {
+      "agility": 0,
+      "hp": 0,
+      "hpMax": 0,
+      "intelligence": 0,
+      "luck": 6,
+      "mp": 0,
+      "mpMax": 0,
+      "strength": 10
+    }
+  }
 }

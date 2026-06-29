@@ -11,6 +11,7 @@ type room struct {
 	mapDef        world.MapConfig
 	players       map[string]Player
 	monsters      map[string]Monster
+	lootDrops     map[string]LootDrop
 	projectiles   map[string]Projectile
 	pendingSkills map[string]PendingSkill
 	peers         map[string]Peer
@@ -22,6 +23,7 @@ func newRoom(id string, mapDef world.MapConfig) *room {
 		mapDef:        mapDef,
 		players:       make(map[string]Player),
 		monsters:      make(map[string]Monster),
+		lootDrops:     make(map[string]LootDrop),
 		projectiles:   make(map[string]Projectile),
 		pendingSkills: make(map[string]PendingSkill),
 		peers:         make(map[string]Peer),
@@ -34,6 +36,7 @@ func roomSnapshot(room *room) RoomState {
 		Map:         room.mapDef,
 		Players:     maps.Clone(room.players),
 		Monsters:    maps.Clone(room.monsters),
+		LootDrops:   maps.Clone(room.lootDrops),
 		Projectiles: maps.Clone(room.projectiles),
 	}
 }
